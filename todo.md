@@ -1,0 +1,25 @@
+# Project TODO
+
+- [x] Define the central controller domain model, trust boundary, command lifecycle, and Dockerfile communication protocol.
+- [x] Add persistent instance registry fields for URL, name, access credential metadata, status, resource metrics, and last-seen timestamp.
+- [x] Add persistent terminal session and ordered terminal event history with command, stdout, stderr, stdin, timestamps, and exit status.
+- [x] Implement secure instance registration that accepts an instance name and URL, creates a one-time enrollment credential, and delivers the generated Dockerfile communication protocol to the supplied instance URL.
+- [x] Implement the controller-facing instance agent API for enrollment, heartbeat, resource reporting, command execution, terminal output, stdin delivery, and completion status.
+- [x] Implement least-loaded instance routing using reported CPU and memory usage, with online-status eligibility checks.
+- [x] Implement periodic heartbeat monitoring and clear online/offline status transitions.
+- [x] Implement central controller APIs to list, rename, remove, inspect, and select registered instances.
+- [x] Implement real-time terminal session streaming with a server-sent event endpoint and interactive stdin submission.
+- [x] Build the refined controller dashboard with sidebar instance navigation, at-a-glance resource status, registration flow, terminal workspace, history, and instance details.
+- [x] Add visible query error states and recovery actions for instance navigation, instance details, and terminal history.
+- [x] Add terminal stream reconnect and disconnected-state handling for resilient live stdout and stderr updates.
+- [x] Add an explicit terminal-stream disconnected state after retry exhaustion, with visible feedback and manual reconnect.
+- [x] Stop automatic stream retries for terminal session authorization or lookup failures and surface the failure state in the terminal workspace.
+- [x] Keep active-session resource metrics correct when very short remote commands complete during dispatch.
+- [x] Add Dockerfile template and deployment documentation for remote instances.
+- [x] Add Render deployment configuration and complete environment-variable documentation for the central controller.
+- [x] Write and run unit tests for registry, enrollment, command routing, terminal event ordering, heartbeat state, and Dockerfile generation.
+- [x] Verify TypeScript, tests, migration state, responsive UI behavior, and Render-ready build configuration.
+- [x] Add controller-route tests for instance registry and agent enrollment behavior.
+- [x] Add controller-route tests for least-loaded routing, selected-instance execution, active-session accounting, and terminal history ordering.
+- [x] Add a controller history test that verifies persisted terminal events are returned in ascending commit order.
+- [x] Add command-routing tests that verify active-session increments on dispatch success and decrements on dispatch failure.
