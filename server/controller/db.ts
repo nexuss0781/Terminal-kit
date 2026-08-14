@@ -5,6 +5,7 @@ import { selectLeastLoaded, selectPreferredInstance, type ResourcePreference } f
 
 export async function createInstance(values: Pick<Instance, "createdBy" | "name" | "instanceUrl" | "enrollmentTokenHash">) { return (await getParadoxStore()).createInstance(values); }
 export async function getInstanceById(id: number) { return (await getParadoxStore()).getInstanceById(id); }
+export async function getInstanceByUrl(instanceUrl: string) { return (await getParadoxStore()).getInstanceByUrl(instanceUrl); }
 export async function getInstanceForUser(id: number, userId: number) { return (await getParadoxStore()).getInstanceForUser(id, userId); }
 export async function getInstanceByEnrollmentHash(hash: string) { return (await getParadoxStore()).getInstanceByEnrollmentHash(hash); }
 export async function getInstanceByAgentHash(hash: string) { return (await getParadoxStore()).getInstanceByAgentHash(hash); }

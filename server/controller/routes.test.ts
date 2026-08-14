@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   addTerminalEvent: vi.fn(),
+  createInstance: vi.fn(),
   getInstanceByAgentHash: vi.fn(),
   getInstanceByEnrollmentHash: vi.fn(),
+  getInstanceByUrl: vi.fn(),
   getSessionById: vi.fn(),
   getSessionForUser: vi.fn(),
   incrementActiveSessions: vi.fn(),
@@ -12,9 +14,11 @@ const db = vi.hoisted(() => ({
   updateInstance: vi.fn(),
   updateSession: vi.fn(),
 }));
+const owner = vi.hoisted(() => ({ getControllerServiceOwner: vi.fn() }));
 
 vi.mock("./db", () => db);
 vi.mock("../_core/sdk", () => ({ sdk: { authenticateRequest: vi.fn() } }));
+vi.mock("./serviceOwner", () => owner);
 
 import { decryptSecret, hashSecret } from "./crypto";
 import { registerControllerRoutes } from "./routes";
@@ -26,6 +30,8 @@ describe("agent enrollment route", () => {
   beforeEach(async () => {
     process.env.INSTANCE_CREDENTIAL_KEY = "terminal-kit-enrollment-test-key";
     Object.values(db).forEach(mock => mock.mockReset());
+    owner.getControllerServiceOwner.mockReset();
+    owner.getControllerServiceOwner.mockResolvedValue({ id: 7 });
     const app = express();
     app.use(express.json());
     registerControllerRoutes(app);
@@ -68,5 +74,31 @@ describe("agent enrollment route", () => {
     });
     expect(response.status).toBe(401);
     expect(db.updateInstance).not.toHaveBeenCalled();
+  });
+
+  it("automatically registers a Render agent after it proves control of its own endpoint", async () => {
+    const originalFetch = globalThis.fetch;
+    const bootstrapSecret = "a".repeat(43);
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === "https://worker.onrender.com/v1/terminal-kit/bootstrap") {
+        expect(init?.headers).toMatchObject({ "x-terminal-kit-bootstrap": bootstrapSecret });
+        return new Response(JSON.stringify({ accepted: true }), { status: 202 });
+      }
+      return originalFetch(input, init);
+    }));
+    db.getInstanceByUrl.mockResolvedValue(undefined);
+    db.createInstance.mockResolvedValue({ id: 81 });
+
+    const response = await originalFetch(`${baseUrl}/api/agent/auto-enroll`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ bootstrapSecret, instanceUrl: "https://worker.onrender.com", hostname: "worker", cpuCount: 4, memoryTotalMb: 8192, diskTotalMb: 32_000 }),
+    });
+    const payload = await response.json() as { instanceId: number; agentToken: string };
+    expect(response.status).toBe(201);
+    expect(payload.instanceId).toBe(81);
+    expect(db.createInstance).toHaveBeenCalledWith(expect.objectContaining({ createdBy: 7, name: "Terminal agent worker", instanceUrl: "https://worker.onrender.com" }));
+    expect(db.updateInstance).toHaveBeenCalledWith(81, expect.objectContaining({ status: "online", agentTokenHash: hashSecret(payload.agentToken), hostname: "worker" }));
+    vi.unstubAllGlobals();
   });
 });

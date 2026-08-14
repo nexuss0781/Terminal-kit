@@ -70,3 +70,4 @@
 - [x] Create and publish a separate public `terminalkit-docker` repository containing the self-enrolling Terminal-Kit Dockerfile and deployment instructions.
 - [x] Rename the public Docker-agent repository to `terminalkit-docker` and align its public name with Terminal-Kit.
 - [x] Replace the terminalkit-docker README with a short, neutral public-purpose overview without deployment, environment, or controller-domain guidance.
+- [ ] Remove manual controller URL, enrollment-token, and instance-endpoint requirements from the published Docker agent by implementing controlled automatic self-registration.

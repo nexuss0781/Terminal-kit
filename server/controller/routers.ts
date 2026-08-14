@@ -79,10 +79,7 @@ export const controllerRouter = router({
           enrollmentTokenHash: hashSecret(enrollmentToken),
         });
         if (!instance) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Instance could not be created" });
-        const dockerfile = generateAgentDockerfile({
-          controllerUrl: controllerUrl(ctx.req),
-          enrollmentToken,
-        });
+        const dockerfile = generateAgentDockerfile();
         let deliveryStatus: "sent" | "pending" = "sent";
         let deliveryError: string | undefined;
         try {

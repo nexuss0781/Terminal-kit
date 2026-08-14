@@ -111,7 +111,7 @@ export function registerPublicControllerApi(app: Express) {
       const instanceUrl = normalizeInstanceUrl(parsed.data.instanceUrl);
       const instance = await createInstance({ createdBy: owner.id, name: parsed.data.name, instanceUrl, enrollmentTokenHash: hashSecret(enrollmentToken) });
       if (!instance) return apiError(res, 500, "Instance could not be created");
-      const dockerfile = generateAgentDockerfile({ controllerUrl: requestControllerUrl(req), enrollmentToken });
+      const dockerfile = generateAgentDockerfile();
       let deliveryStatus: "sent" | "pending" = "sent";
       let deliveryError: string | undefined;
       try { await sendDockerfile(instanceUrl, dockerfile, enrollmentToken); }

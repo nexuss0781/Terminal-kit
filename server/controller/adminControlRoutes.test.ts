@@ -17,9 +17,6 @@ describe("administrator provisioning download", () => {
   beforeEach(async () => {
     process.env.PUBLIC_CONTROLLER_URL = "https://terminalkit.example.com";
     Object.values(db).forEach(mock => mock.mockReset());
-    owner.getControllerServiceOwner.mockReset();
-    owner.getControllerServiceOwner.mockResolvedValue({ id: 7 });
-    db.createInstance.mockResolvedValue({ id: 42 });
     db.listAllInstances.mockResolvedValue([]);
     const app = express();
     app.use(express.json());
@@ -41,8 +38,9 @@ describe("administrator provisioning download", () => {
     const login = await fetch(`${baseUrl}/api/admin/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: process.env.ADMIN_PASSWORD }) });
     const dockerfile = await fetch(`${baseUrl}/api/admin/provisioning/dockerfile`, { headers: { cookie: login.headers.get("set-cookie") ?? "" } });
     expect(dockerfile.status).toBe(200);
-    await expect(dockerfile.text()).resolves.toContain("TERMINAL_KIT_PROTOCOL_VERSION=2");
-    expect(db.createInstance).toHaveBeenCalledWith(expect.objectContaining({ createdBy: 7, instanceUrl: "https://pending.invalid", name: expect.stringMatching(/^Pending agent /) }));
+    const source = await dockerfile.text();
+    expect(source).toContain("TERMINAL_KIT_PROTOCOL_VERSION=2");
+    expect(source).toContain("terminalkit-docker/main/agent.mjs");
   });
 
   it("returns fleet inventory and allows the administrator to rename a self-enrolled instance", async () => {

@@ -1,9 +1,11 @@
 import type { Express, Request, Response } from "express";
-import { createSecret, encryptSecret, hashSecret } from "./crypto";
+import { createSecret, decryptSecret, encryptSecret, hashSecret } from "./crypto";
 import {
   addTerminalEvent,
+  createInstance,
   getInstanceByAgentHash,
   getInstanceByEnrollmentHash,
+  getInstanceByUrl,
   getSessionById,
   incrementActiveSessions,
   listTerminalEvents,
@@ -13,6 +15,7 @@ import {
 import { terminalEventBus } from "./stream";
 import { isTerminalOutputKind, normalizeInstanceUrl } from "./protocol";
 import { hasControllerApiAccess } from "./apiAuth";
+import { getControllerServiceOwner } from "./serviceOwner";
 
 function bearerToken(req: Request) {
   const header = req.header("authorization");
@@ -52,6 +55,19 @@ function reportedAgentMetadata(body: Record<string, unknown>) {
   };
 }
 
+function automaticName(metadata: ReturnType<typeof reportedAgentMetadata>) {
+  return metadata.hostname ? `Terminal agent ${metadata.hostname}` : "Terminal agent";
+}
+
+async function verifyBootstrap(instanceUrl: string, bootstrapSecret: string) {
+  const response = await fetch(`${instanceUrl}/v1/terminal-kit/bootstrap`, {
+    method: "POST",
+    headers: { "x-terminal-kit-bootstrap": bootstrapSecret },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error("The deployed agent did not accept its bootstrap challenge");
+}
+
 export function registerControllerRoutes(app: Express) {
   app.get("/api/controller/health", (_req, res) => res.status(200).json({ status: "online" }));
 
@@ -75,6 +91,47 @@ export function registerControllerRoutes(app: Express) {
       return res.status(201).json({ instanceId: instance.id, agentToken });
     } catch (error) {
       return res.status(500).json({ error: error instanceof Error ? error.message : "Enrollment failed" });
+    }
+  });
+
+  app.post("/api/agent/auto-enroll", async (req, res) => {
+    try {
+      const bootstrapSecret = typeof req.body?.bootstrapSecret === "string" ? req.body.bootstrapSecret : "";
+      const metadata = reportedAgentMetadata(req.body ?? {});
+      if (!bootstrapSecret || bootstrapSecret.length < 32) return res.status(400).json({ error: "Automatic bootstrap credential is required" });
+      if (!metadata.instanceUrl) return res.status(400).json({ error: "A Render public endpoint is required for automatic enrollment" });
+      if (!new URL(metadata.instanceUrl).hostname.toLowerCase().endsWith(".onrender.com")) {
+        return res.status(400).json({ error: "Automatic enrollment currently accepts Render service endpoints only" });
+      }
+
+      await verifyBootstrap(metadata.instanceUrl, bootstrapSecret);
+      const existing = await getInstanceByUrl(metadata.instanceUrl);
+      const agentToken = existing?.agentTokenCiphertext ? decryptSecret(existing.agentTokenCiphertext) : createSecret();
+      const updates = {
+        enrollmentTokenHash: hashSecret(bootstrapSecret),
+        agentTokenHash: hashSecret(agentToken),
+        agentTokenCiphertext: encryptSecret(agentToken),
+        ...(existing && !existing.name.startsWith("Pending agent") && !existing.name.startsWith("Terminal agent") ? {} : { name: automaticName(metadata) }),
+        ...metadata,
+        status: "online" as const,
+        lastSeenAt: new Date(),
+      };
+      if (existing) {
+        await updateInstance(existing.id, updates);
+        return res.status(200).json({ instanceId: existing.id, agentToken });
+      }
+
+      const owner = await getControllerServiceOwner();
+      const instance = await createInstance({
+        createdBy: owner.id,
+        name: automaticName(metadata),
+        instanceUrl: metadata.instanceUrl,
+        enrollmentTokenHash: hashSecret(bootstrapSecret),
+      });
+      await updateInstance(instance.id, updates);
+      return res.status(201).json({ instanceId: instance.id, agentToken });
+    } catch (error) {
+      return res.status(503).json({ error: error instanceof Error ? error.message : "Automatic enrollment unavailable" });
     }
   });
 

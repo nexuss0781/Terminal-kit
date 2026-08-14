@@ -1,14 +1,8 @@
 import type { Express, Request } from "express";
 import { requireAdmin } from "./adminRoutes";
-import { createSecret, hashSecret } from "./crypto";
-import { createInstance, getInstanceById, listAllInstances, updateInstance } from "./db";
+import { getInstanceById, listAllInstances, updateInstance } from "./db";
 import { generateAgentDockerfile } from "./dockerfile";
-import { getControllerServiceOwner } from "./serviceOwner";
 import { summarizeFleet } from "./inventory";
-
-function controllerUrl(req: Request) {
-  return process.env.PUBLIC_CONTROLLER_URL?.replace(/\/$/, "") ?? `${req.protocol}://${req.get("host")}`;
-}
 
 export function registerAdminControlRoutes(app: Express) {
   app.get("/api/admin/inventory", requireAdmin, async (_req, res) => {
@@ -39,18 +33,10 @@ export function registerAdminControlRoutes(app: Express) {
 
   app.get("/api/admin/provisioning/dockerfile", requireAdmin, async (req, res) => {
     try {
-      const owner = await getControllerServiceOwner();
-      const enrollmentToken = createSecret();
-      const instance = await createInstance({
-        createdBy: owner.id,
-        name: `Pending agent ${enrollmentToken.slice(-8)}`,
-        instanceUrl: "https://pending.invalid",
-        enrollmentTokenHash: hashSecret(enrollmentToken),
-      });
-      const dockerfile = generateAgentDockerfile({ controllerUrl: controllerUrl(req), enrollmentToken });
+      const dockerfile = generateAgentDockerfile();
       res.status(200).set({
         "content-type": "text/plain; charset=utf-8",
-        "content-disposition": `attachment; filename="Dockerfile.terminal-kit-${instance.id}"`,
+        "content-disposition": "attachment; filename=Dockerfile.terminal-kit-agent",
         "cache-control": "no-store",
       }).send(dockerfile);
     } catch (error) {

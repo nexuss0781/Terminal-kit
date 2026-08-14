@@ -3,19 +3,12 @@ import { generateAgentDockerfile } from "./dockerfile";
 import { TERMINAL_KIT_PROTOCOL_VERSION } from "./protocol";
 
 describe("Dockerfile communication protocol", () => {
-  it("embeds the controller enrollment details and interactive terminal agent", () => {
-    const dockerfile = generateAgentDockerfile({
-      controllerUrl: "https://controller.example.com/",
-      enrollmentToken: "one-time-enrollment-token",
-    });
+  it("builds a zero-configuration agent that obtains its protocol source from the public client repository", () => {
+    const dockerfile = generateAgentDockerfile();
     expect(dockerfile).toContain(TERMINAL_KIT_PROTOCOL_VERSION);
-    expect(dockerfile).toContain("CONTROLLER_URL=\"https://controller.example.com\"");
-    expect(dockerfile).toContain("RENDER_EXTERNAL_URL");
-    expect(dockerfile).toContain("statfs");
-    expect(dockerfile).not.toContain("INSTANCE_NAME=");
-    expect(dockerfile).toContain("one-time-enrollment-token");
-    expect(dockerfile).toContain("/v1/terminal-kit/bootstrap");
-    expect(dockerfile).toContain('spawn("script"');
-    expect(dockerfile).toContain("/stdin");
+    expect(dockerfile).toContain("https://raw.githubusercontent.com/nexuss0781/terminalkit-docker/main/agent.mjs");
+    expect(dockerfile).not.toContain("ENROLLMENT_TOKEN");
+    expect(dockerfile).not.toContain("CONTROLLER_URL=");
+    expect(dockerfile).toContain('CMD ["node", "/app/agent.mjs"]');
   });
 });

@@ -2,9 +2,7 @@
 
 ## Purpose
 
-Terminal-Kit is a central control plane for many independently deployed terminal agents. The administrator downloads a single communication Dockerfile from the protected console, deploys it to an instance, and performs no further registration steps. On startup, the agent automatically reports its public endpoint, identity, health, and resource inventory to the controller.
-
-> The Dockerfile is a **one-time enrollment credential**. It is not a general-purpose image and must be handled as a secret until the agent has enrolled.
+Terminal-Kit is a central control plane for many independently deployed terminal agents. The administrator downloads a single communication Dockerfile from the protected console, deploys it to a Render instance, and performs no further registration steps. On startup, the agent discovers its Render endpoint and automatically reports identity, health, and resource inventory to the controller.
 
 ## Trust Model
 
@@ -12,7 +10,7 @@ Terminal-Kit is a central control plane for many independently deployed terminal
 | --- | --- | --- |
 | System administrator | `ADMIN_PASSWORD` held only in Render | Opens the console, downloads a provisioning Dockerfile, views inventory, and renames instances. |
 | Nexuss AI | `CONTROLLER_API_KEY` bearer token | Lists instances, selects a resource preference, dispatches commands, supplies stdin, and consumes SSE output. |
-| Remote agent | One-time enrollment token, then its issued agent token | Self-enrolls, reports health/resources, receives commands, and streams terminal events. |
+| Remote agent | Locally generated bootstrap secret, then its issued agent token | Proves control of its deployed endpoint, self-registers, reports health/resources, receives commands, and streams terminal events. |
 
 The administrator password is exchanged only with the controller and creates a signed, HTTP-only session cookie. It is never embedded in the Dockerfile. The AI bearer key remains an API credential and is never needed by the browser console.
 
@@ -24,20 +22,20 @@ sequenceDiagram
   participant C as Controller
   participant R as Render agent service
   A->>C: Authenticated download request
-  C-->>A: One-time provisioning Dockerfile
+  C-->>A: Zero-configuration provisioning Dockerfile
   A->>R: Deploy Dockerfile
-  R->>C: POST agent/enroll (token, endpoint, inventory)
+  R->>C: POST agent/auto-enroll (endpoint, bootstrap proof, inventory)
   C-->>R: Instance ID and agent token
   R->>C: Heartbeats, resource updates, and terminal events
   C-->>A: Instance health and inventory
   C-->>C: API-first routing for Nexuss agents
 ```
 
-The agent determines its endpoint from `INSTANCE_PUBLIC_URL` when explicitly supplied, otherwise `RENDER_EXTERNAL_URL`. Render provides `RENDER_EXTERNAL_URL` for web services and static sites as the full `onrender.com` URL.[1] A deployment that uses a custom domain should set `INSTANCE_PUBLIC_URL` to that custom HTTPS endpoint.
+The agent uses Render’s public service URL automatically. The controller verifies that the deployed agent accepts a challenge at that endpoint before it stores the instance and issues its agent credential.[1]
 
 ## Agent Metadata Contract
 
-At enrollment and on each heartbeat, the agent submits the fields below. The controller treats agent data as operational telemetry; only a valid enrollment or agent token can update it.
+At enrollment and on each heartbeat, the agent submits the fields below. The controller treats agent data as operational telemetry; automatic enrollment requires successful endpoint challenge verification and subsequent updates require the issued agent token.
 
 | Group | Fields |
 | --- | --- |

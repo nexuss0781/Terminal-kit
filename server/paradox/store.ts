@@ -144,13 +144,14 @@ export function createParadoxStore(connection: ParadConnection) {
     },
     getInstanceById,
     getInstanceForUser(id: number, userId: number) { const row = one("SELECT * FROM instances WHERE id = ? AND createdBy = ?", [id, userId]); return row ? asInstance(row) : undefined; },
+    getInstanceByUrl(instanceUrl: string) { const row = one("SELECT * FROM instances WHERE instanceUrl = ?", [instanceUrl]); return row ? asInstance(row) : undefined; },
     getInstanceByEnrollmentHash(hash: string) { const row = one("SELECT * FROM instances WHERE enrollmentTokenHash = ?", [hash]); return row ? asInstance(row) : undefined; },
     getInstanceByAgentHash(hash: string) { const row = one("SELECT * FROM instances WHERE agentTokenHash = ?", [hash]); return row ? asInstance(row) : undefined; },
     listInstancesForUser(userId: number) { return rows("SELECT * FROM instances WHERE createdBy = ? ORDER BY name", [userId]).map(asInstance); },
     listAllInstances() { return rows("SELECT * FROM instances ORDER BY id").map(asInstance); },
     updateInstance(id: number, values: InstancePatch) {
       const patch = values as Record<string, unknown>;
-      const keys = ["name", "instanceUrl", "status", "agentTokenHash", "agentTokenCiphertext", "hostname", "agentVersion", "osPlatform", "architecture", "cpuCount", "cpuPercent", "memoryPercent", "memoryTotalMb", "diskPercent", "diskTotalMb", "diskFreeMb", "activeSessions", "lastSeenAt"].filter(key => patch[key] !== undefined);
+      const keys = ["name", "instanceUrl", "status", "enrollmentTokenHash", "agentTokenHash", "agentTokenCiphertext", "hostname", "agentVersion", "osPlatform", "architecture", "cpuCount", "cpuPercent", "memoryPercent", "memoryTotalMb", "diskPercent", "diskTotalMb", "diskFreeMb", "activeSessions", "lastSeenAt"].filter(key => patch[key] !== undefined);
       if (keys.length) connection.execute(`UPDATE instances SET ${[...keys.map(key => `${key} = ?`), "updatedAt = ?"].join(", ")} WHERE id = ?`, [...keys.map(key => patch[key] instanceof Date ? iso(patch[key] as Date) : patch[key]), iso(), id]);
       return getInstanceById(id);
     },
