@@ -51,7 +51,7 @@
 - [x] Verify live authenticated `/api/v1/*` access after the configured key is saved in Render and the service redeploys.
 - [x] Diagnose and resolve the live Render `CONTROLLER_API_KEY` mismatch after the first post-configuration authorization check returned 401.
 - [x] Diagnose and resolve the ParadoxDB initialization failure causing the live controller health sweep to report an unavailable database connection.
-- [ ] Confirm that a dedicated stable `INSTANCE_CREDENTIAL_KEY` is present in the existing Render service; current live persistence can fall back to `JWT_SECRET`.
+- [ ] Add and verify an authenticated runtime-status check that confirms a dedicated stable `INSTANCE_CREDENTIAL_KEY` is present in Render; current live persistence can fall back to `JWT_SECRET`.
 - [x] Remove the need to configure legacy OAuth environment values for the minimal instance-enrollment frontend on Render.
 - [x] Remove inherited Manus OAuth from the Render deployment and replace it with a standalone controller-API-key registration flow.
 - [x] Re-read the user-provided ParadoxDB skill and complete Terminal-Kit persistence migration using the live active-domain resolver.

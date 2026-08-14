@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { hasControllerApiAccess } from "./apiAuth";
 import { createSecret, decryptSecret, encryptSecret, hashSecret } from "./crypto";
+import { controllerRuntimeStatus } from "./runtimeStatus";
 import { getControllerServiceOwner } from "./serviceOwner";
 import {
   addTerminalEvent,
@@ -84,7 +85,7 @@ export function registerPublicControllerApi(app: Express) {
   app.use("/api/v1", (req, res, next) => hasControllerApiAccess(req) ? next() : apiError(res, 401, "Unauthorized"));
 
   app.get("/api/v1/openapi.json", (req, res) => res.status(200).json(openApiDocument(req)));
-  app.get("/api/v1/health", (_req, res) => res.status(200).json({ status: "online", service: "terminal-kit-controller", version: "v1" }));
+  app.get("/api/v1/health", (_req, res) => res.status(200).json({ status: "online", service: "terminal-kit-controller", version: "v1", runtime: controllerRuntimeStatus() }));
 
   app.get("/api/v1/instances", async (_req, res) => {
     try { return res.status(200).json({ data: await listAllInstances() }); }
