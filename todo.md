@@ -63,4 +63,5 @@
 - [x] Add API-first instance discovery and resource-aware routing for Nexuss AI agents, including selection by declared resource preference.
 - [x] Replace the public registration form with Dockerfile-only provisioning and build a password-protected admin console for instance list, total resources, health, details, and rename management.
 - [x] Preserve administrator authentication and show a retryable inline error when the inventory API temporarily fails.
-- [ ] Update deployment documentation, test the new protocol and admin security, publish, and verify the live Render deployment.
+- [ ] Set `ADMIN_PASSWORD` on the existing Render service, then complete authenticated live validation of the administrator console and self-enrollment flow.
+- [x] Update deployment documentation, test the new protocol and admin security, publish, and verify the public Render administrator entry point.
