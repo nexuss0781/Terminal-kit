@@ -34,6 +34,12 @@
 - [x] Define and document the `paradox-domain/` active-domain resolver contract for dynamically locating the currently deployed ParadoxDB gateway.
 - [x] Build a Docker-deployable static `paradox-domain/` service that publishes the active ParadoxDB gateway domain from configuration.
 - [ ] Add resolver-driven ParadoxDB gateway discovery with validation, caching, and deterministic fallback behavior for Terminal-Kit and reusable integrations.
-- [ ] Test the active-domain resolver contract and deployment artifact before enabling ParadoxDB persistence migration.
+- [x] Test the active-domain resolver contract and deployment artifact before enabling ParadoxDB persistence migration.
+- [x] Fix Paradox-DB’s async SQLAlchemy PostgreSQL driver configuration for Render and push the validated correction to GitHub.
+- [x] Update Paradox-DB test helpers to reuse the shared async PostgreSQL URL normalizer.
+- [x] Run a gateway startup validation with a Render-style PostgreSQL URL to prove asyncpg is selected end to end.
+- [x] Update the live paradox-domain Static Site with concise public purpose and usage guidance while preserving the active-domain resolver endpoint.
+- [ ] Push the updated paradox-domain static-site content and trigger its Render rebuild.
+- [ ] Re-verify the live root page and active-domain resolver document after deployment.
 - [x] Add `paradox-domain/render.yaml` for direct standalone Docker deployment on Render.
 - [x] Convert `paradox-domain` from a Docker runtime resolver to a Render Static Site that builds `active-domain.json` from `PARADOX_GATEWAY_URL`.
