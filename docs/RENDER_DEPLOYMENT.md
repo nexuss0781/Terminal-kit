@@ -1,35 +1,40 @@
 # Terminal-Kit Render Deployment
 
-Terminal-Kit uses **ParadoxDB by default**. It creates a dedicated controller identity and encrypted controller database automatically, discovers the active ParadoxDB gateway from the static resolver, and synchronizes its state through ParadoxDB. No SQL database, Telegram credential, ParadoxDB API key, or ParadoxDB passphrase needs to be configured in Render.
+Terminal-Kit is hosted entirely on **Render**: one Render Web Service serves the protected controller API and the small instance-enrollment page. The application does not require Manus, its OAuth service, a SQL database, Telegram credentials, a ParadoxDB API key, or a ParadoxDB passphrase.
 
-## Configure in Render
+## Required Render Variables
 
-Create a **Web Service** from `nexuss0781/Terminal-kit` on branch `main`. Use the root directory and let the committed `render.yaml` supply the build and start commands.
+Create a **Web Service** from `nexuss0781/Terminal-kit` on branch `main`. Use the repository root and the committed `render.yaml` build/start commands.
 
 | Variable | Value |
 | --- | --- |
-| `CONTROLLER_API_KEY` | The existing private Terminal-Kit controller bearer key. It protects `/api/v1/*` and seeds the controller’s public API access. |
-| `PUBLIC_CONTROLLER_URL` | Set this only after the first deployment to the Render URL, for example `https://terminal-kit-controller.onrender.com`; then redeploy once. |
+| `CONTROLLER_API_KEY` | A private high-entropy bearer token. It protects `/api/v1/*` and is entered in the enrollment page when registering an instance. |
+| `PUBLIC_CONTROLLER_URL` | The exact Render HTTPS URL, for example `https://terminalkit.onrender.com`. |
+| `JWT_SECRET` | Generate a value in Render once and retain it permanently. It derives the controller’s ParadoxDB identity and encrypted database passphrase. |
+| `INSTANCE_CREDENTIAL_KEY` | Generate a value in Render once and retain it permanently. It encrypts remote instance credentials. |
 
-Render generates and retains `JWT_SECRET` and `INSTANCE_CREDENTIAL_KEY` from the Blueprint. `JWT_SECRET` deterministically seeds the dedicated ParadoxDB service identity, encrypted database name, and encryption passphrase; keep it unchanged after the first deployment.
+> Do not rotate `JWT_SECRET` or `INSTANCE_CREDENTIAL_KEY` after deployment. Changing either one can make existing persisted data or enrolled instance credentials unreadable.
 
-> **Credential strategy:** Terminal-Kit derives its own ParadoxDB service identity at runtime from `JWT_SECRET`, creates the service identity through the resolved gateway if it does not exist, and keeps the resulting ParadoxDB key in process memory only. Supplying `PARADOX_API_KEY` or `PARADOX_PASSPHRASE` is optional only when you intentionally need to override this default strategy.
-
-The Blueprint sets these defaults automatically:
+The Blueprint supplies these defaults:
 
 ```text
 PARADOX_DOMAIN_RESOLVER_URL=https://paradox-domain.onrender.com/active-domain.json
 PARADOX_PROJECT=terminal-kit
 ```
 
-The resolver returns the active ParadoxDB domain. Terminal-Kit normalizes it to the versioned API base internally and does not expose any ParadoxDB or Telegram credentials to the browser or remote instances.
+Terminal-Kit resolves the active ParadoxDB gateway through the static resolver, derives its own service identity from `JWT_SECRET`, and provisions the encrypted controller database automatically.
 
-## Deploy sequence
+## Deploy and Verify
 
-First deploy the controller. After Render assigns its public URL, set `PUBLIC_CONTROLLER_URL` to that exact HTTPS URL and redeploy. Verify:
+Deploy the `main` branch, then open the public Render URL. Enter the controller API key, instance name, and public instance URL to generate or deliver the remote Dockerfile communication protocol. The same key can also be used directly with the versioned controller API:
 
-```text
-GET https://<controller-domain>/api/controller/health
+```bash
+curl -H "Authorization: Bearer $CONTROLLER_API_KEY" \
+  https://terminalkit.onrender.com/api/v1/instances
 ```
 
-Then register remote instances through the included minimal registration page or the protected `/api/v1` API. Each generated instance Dockerfile is a secret because it carries a one-time enrollment credential.
+The public liveness endpoint is available without credentials:
+
+```text
+GET https://terminalkit.onrender.com/api/controller/health
+```

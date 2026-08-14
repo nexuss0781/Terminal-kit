@@ -1,9 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { ENV } from "../_core/env";
-import { getUserByOpenId } from "../db";
 import { hasControllerApiAccess } from "./apiAuth";
 import { createSecret, decryptSecret, encryptSecret, hashSecret } from "./crypto";
+import { getControllerServiceOwner } from "./serviceOwner";
 import {
   addTerminalEvent,
   chooseLeastLoadedInstanceGlobal,
@@ -29,12 +28,6 @@ const renameSchema = z.object({ name: z.string().trim().min(1).max(120) });
 
 function requestControllerUrl(req: Request) {
   return process.env.PUBLIC_CONTROLLER_URL?.replace(/\/$/, "") ?? `${req.protocol}://${req.get("host")}`;
-}
-
-async function requireOwner() {
-  const owner = ENV.ownerOpenId ? await getUserByOpenId(ENV.ownerOpenId) : undefined;
-  if (!owner) throw new Error("Controller owner is not initialized. Sign in to the registration interface once before using the API.");
-  return owner;
 }
 
 async function sendDockerfile(instanceUrl: string, dockerfile: string, enrollmentToken: string) {
@@ -102,7 +95,7 @@ export function registerPublicControllerApi(app: Express) {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) return apiError(res, 400, "name and HTTP(S) instanceUrl are required");
     try {
-      const owner = await requireOwner();
+      const owner = await getControllerServiceOwner();
       const enrollmentToken = createSecret();
       const instanceUrl = normalizeInstanceUrl(parsed.data.instanceUrl);
       const instance = await createInstance({ createdBy: owner.id, name: parsed.data.name, instanceUrl, enrollmentTokenHash: hashSecret(enrollmentToken) });
@@ -149,7 +142,7 @@ export function registerPublicControllerApi(app: Express) {
     const parsed = commandSchema.safeParse(req.body);
     if (!parsed.success) return apiError(res, 400, "command is required; instanceId is optional");
     try {
-      const owner = await requireOwner();
+      const owner = await getControllerServiceOwner();
       const instance = parsed.data.instanceId ? await getInstanceById(parsed.data.instanceId) : await chooseLeastLoadedInstanceGlobal();
       if (!instance || instance.status !== "online") return apiError(res, 409, "No online instance is available for command execution");
       const session = await createTerminalSession({ instanceId: instance.id, createdBy: owner.id, command: parsed.data.command });

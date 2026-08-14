@@ -22,9 +22,3 @@ services:
         sync: false
       - key: PUBLIC_CONTROLLER_URL
         sync: false
-      - key: VITE_APP_ID
-        sync: false
-      - key: OAUTH_SERVER_URL
-        sync: false
-      - key: VITE_OAUTH_PORTAL_URL
-        sync: false

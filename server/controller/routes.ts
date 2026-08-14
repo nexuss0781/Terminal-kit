@@ -1,18 +1,16 @@
 import type { Express, Request, Response } from "express";
-import { sdk } from "../_core/sdk";
 import { createSecret, encryptSecret, hashSecret } from "./crypto";
 import {
   addTerminalEvent,
   getInstanceByAgentHash,
   getInstanceByEnrollmentHash,
-  getSessionForUser,
   getSessionById,
   incrementActiveSessions,
   listTerminalEvents,
   updateInstance,
   updateSession,
 } from "./db";
-import { terminalEventBus, type TerminalStreamEvent } from "./stream";
+import { terminalEventBus } from "./stream";
 import { isTerminalOutputKind } from "./protocol";
 import { hasControllerApiAccess } from "./apiAuth";
 
@@ -27,21 +25,9 @@ async function authenticateAgent(req: Request) {
   return getInstanceByAgentHash(hashSecret(token));
 }
 
-async function authenticateDashboard(req: Request) {
-  try {
-    return await sdk.authenticateRequest(req);
-  } catch {
-    return null;
-  }
-}
-
 function asNonNegativeInteger(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
-}
-
-function writeSse(res: Response, event: TerminalStreamEvent) {
-  res.write(`event: terminal\ndata: ${JSON.stringify(event)}\n\n`);
 }
 
 export function registerControllerRoutes(app: Express) {
@@ -116,28 +102,4 @@ export function registerControllerRoutes(app: Express) {
     return res.json({ accepted: true });
   });
 
-  app.get("/api/sessions/:sessionId/stream", async (req, res) => {
-    const user = await authenticateDashboard(req);
-    if (!user) return res.status(401).json({ error: "Authentication required" });
-    const session = await getSessionForUser(req.params.sessionId, user.id);
-    if (!session) return res.status(404).json({ error: "Terminal session not found" });
-    if (req.query.preflight === "1") return res.status(200).json({ sessionId: session.id });
-    res.status(200).set({
-      "content-type": "text/event-stream",
-      "cache-control": "no-cache, no-transform",
-      connection: "keep-alive",
-      "x-accel-buffering": "no",
-    });
-    res.flushHeaders();
-    (await listTerminalEvents(session.id)).forEach(event => writeSse(res, {
-      sessionId: session.id,
-      sequence: event.sequence,
-      kind: event.kind,
-      payload: event.payload,
-      createdAt: event.createdAt,
-    }));
-    const unsubscribe = terminalEventBus.subscribe(session.id, event => writeSse(res, event));
-    const keepAlive = setInterval(() => res.write(": keepalive\n\n"), 20_000);
-    req.on("close", () => { clearInterval(keepAlive); unsubscribe(); res.end(); });
-  });
 }

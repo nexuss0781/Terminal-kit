@@ -47,6 +47,13 @@
 - [x] Create dedicated ParadoxDB service credentials for Terminal-Kit, store them server-side, and validate resolver-backed synchronization.
 - [x] Verify a clean final controller restart and a real ParadoxDB-backed persistence flow using only the final default configuration.
 - [x] Document and validate the official runtime-derived ParadoxDB service identity strategy without requiring manual ParadoxDB secrets.
+- [x] Align the configured Terminal-Kit controller API key and provide the exact Render environment values.
+- [x] Verify live authenticated `/api/v1/*` access after the configured key is saved in Render and the service redeploys.
+- [x] Diagnose and resolve the live Render `CONTROLLER_API_KEY` mismatch after the first post-configuration authorization check returned 401.
+- [ ] Diagnose and resolve the ParadoxDB initialization failure causing the live controller health sweep to report an unavailable database connection.
+- [ ] Add stable `JWT_SECRET` and `INSTANCE_CREDENTIAL_KEY` values to the existing Render service, then redeploy the ParadoxDB-backed controller.
+- [x] Remove the need to configure legacy OAuth environment values for the minimal instance-enrollment frontend on Render.
+- [x] Remove inherited Manus OAuth from the Render deployment and replace it with a standalone controller-API-key registration flow.
 - [x] Re-read the user-provided ParadoxDB skill and complete Terminal-Kit persistence migration using the live active-domain resolver.
 - [x] Add `paradox-domain/render.yaml` for direct standalone Docker deployment on Render.
 - [x] Convert `paradox-domain` from a Docker runtime resolver to a Render Static Site that builds `active-domain.json` from `PARADOX_GATEWAY_URL`.
