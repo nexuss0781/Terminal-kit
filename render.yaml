@@ -17,6 +17,8 @@ services:
         generateValue: true
       - key: INSTANCE_CREDENTIAL_KEY
         generateValue: true
+      - key: CONTROLLER_API_KEY
+        sync: false
       - key: PUBLIC_CONTROLLER_URL
         sync: false
       - key: VITE_APP_ID

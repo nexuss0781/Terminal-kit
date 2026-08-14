@@ -23,3 +23,8 @@
 - [x] Add controller-route tests for least-loaded routing, selected-instance execution, active-session accounting, and terminal history ordering.
 - [x] Add a controller history test that verifies persisted terminal events are returned in ascending commit order.
 - [x] Add command-routing tests that verify active-session increments on dispatch success and decrements on dispatch failure.
+- [x] Reframe Terminal-Kit documentation and API contract as a backend-first control plane for Nexuss agentic AIs.
+- [x] Add a dedicated versioned HTTP API surface for controller operations, instance management, command execution, stdin simulation, history, and real-time terminal streaming.
+- [x] Reduce the frontend to the instance URL/name registration and Dockerfile communication delivery flow only.
+- [x] Add backend-first API documentation, OpenAPI-style endpoint reference, and integration examples for AI agents.
+- [x] Validate the backend-first contract, minimal registration frontend, test suite, and production build.

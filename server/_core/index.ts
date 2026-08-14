@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerControllerRoutes } from "../controller/routes";
 import { startHealthMonitor } from "../controller/health";
+import { registerPublicControllerApi } from "../controller/publicApi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -39,6 +40,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerControllerRoutes(app);
+  registerPublicControllerApi(app);
   startHealthMonitor();
   // tRPC API
   app.use(

@@ -56,6 +56,11 @@ export async function listAllInstances() {
   return db.select().from(instances).orderBy(asc(instances.id));
 }
 
+export async function listSessionsForInstanceAdmin(instanceId: number) {
+  const db = await requireDb();
+  return db.select().from(terminalSessions).where(eq(terminalSessions.instanceId, instanceId)).orderBy(desc(terminalSessions.createdAt));
+}
+
 export async function updateInstance(id: number, values: Partial<typeof instances.$inferInsert>) {
   const db = await requireDb();
   await db.update(instances).set({ ...values, updatedAt: now() }).where(eq(instances.id, id));
@@ -77,6 +82,15 @@ export async function markStaleInstancesOffline(maxAgeMs: number) {
 
 export async function chooseLeastLoadedInstance(userId: number) {
   return selectLeastLoaded(await listInstancesForUser(userId));
+}
+
+export async function chooseLeastLoadedInstanceGlobal() {
+  return selectLeastLoaded(await listAllInstances());
+}
+
+export async function removeInstanceById(id: number) {
+  const db = await requireDb();
+  await db.delete(instances).where(eq(instances.id, id));
 }
 
 export async function createTerminalSession(values: { instanceId: number; createdBy: number; command: string }) {

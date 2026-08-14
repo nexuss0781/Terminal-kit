@@ -14,6 +14,7 @@ import {
 } from "./db";
 import { terminalEventBus, type TerminalStreamEvent } from "./stream";
 import { isTerminalOutputKind } from "./protocol";
+import { hasControllerApiAccess } from "./apiAuth";
 
 function bearerToken(req: Request) {
   const header = req.header("authorization");
