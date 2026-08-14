@@ -29,3 +29,4 @@
 - [x] Add backend-first API documentation, OpenAPI-style endpoint reference, and integration examples for AI agents.
 - [x] Validate the backend-first contract, minimal registration frontend, test suite, and production build.
 - [x] Create a private GitHub repository named Terminal-kit and push the completed source code.
+- [x] Change the Terminal-kit GitHub repository visibility from private to public.
