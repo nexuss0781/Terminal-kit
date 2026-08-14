@@ -39,7 +39,7 @@
 - [x] Update Paradox-DB test helpers to reuse the shared async PostgreSQL URL normalizer.
 - [x] Run a gateway startup validation with a Render-style PostgreSQL URL to prove asyncpg is selected end to end.
 - [x] Update the live paradox-domain Static Site with concise public purpose and usage guidance while preserving the active-domain resolver endpoint.
-- [ ] Push the updated paradox-domain static-site content and trigger its Render rebuild.
-- [ ] Re-verify the live root page and active-domain resolver document after deployment.
+- [x] Push the updated paradox-domain static-site content and trigger its Render rebuild.
+- [x] Re-verify the live root page and active-domain resolver document after deployment.
 - [x] Add `paradox-domain/render.yaml` for direct standalone Docker deployment on Render.
 - [x] Convert `paradox-domain` from a Docker runtime resolver to a Render Static Site that builds `active-domain.json` from `PARADOX_GATEWAY_URL`.
