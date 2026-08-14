@@ -65,3 +65,4 @@
 - [x] Preserve administrator authentication and show a retryable inline error when the inventory API temporarily fails.
 - [ ] Set `ADMIN_PASSWORD` on the existing Render service, then complete authenticated live validation of the administrator console and self-enrollment flow.
 - [x] Update deployment documentation, test the new protocol and admin security, publish, and verify the public Render administrator entry point.
+- [ ] Republish the current tested release and verify that the deployed hashed JavaScript bundle loads without browser transport errors.
