@@ -1,4 +1,4 @@
-export const TERMINAL_KIT_PROTOCOL_VERSION = "TERMINAL_KIT_PROTOCOL_VERSION=1";
+export const TERMINAL_KIT_PROTOCOL_VERSION = "TERMINAL_KIT_PROTOCOL_VERSION=2";
 
 export function normalizeInstanceUrl(value: string) {
   const url = new URL(value);

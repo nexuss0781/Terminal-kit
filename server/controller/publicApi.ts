@@ -6,7 +6,7 @@ import { controllerRuntimeStatus } from "./runtimeStatus";
 import { getControllerServiceOwner } from "./serviceOwner";
 import {
   addTerminalEvent,
-  chooseLeastLoadedInstanceGlobal,
+  choosePreferredInstanceGlobal,
   createInstance,
   createTerminalSession,
   getInstanceById,
@@ -21,9 +21,11 @@ import {
 import { generateAgentDockerfile } from "./dockerfile";
 import { normalizeInstanceUrl } from "./protocol";
 import { terminalEventBus, type TerminalStreamEvent } from "./stream";
+import { summarizeFleet } from "./inventory";
+import type { ResourcePreference } from "./balancer";
 
 const registerSchema = z.object({ name: z.string().trim().min(1).max(120), instanceUrl: z.string().url().max(2048) });
-const commandSchema = z.object({ command: z.string().min(1).max(20_000), instanceId: z.number().int().positive().optional() });
+const commandSchema = z.object({ command: z.string().min(1).max(20_000), instanceId: z.number().int().positive().optional(), resourcePreference: z.enum(["balanced", "cpu", "memory", "disk"]).optional() });
 const stdinSchema = z.object({ input: z.string().max(20_000) });
 const renameSchema = z.object({ name: z.string().trim().min(1).max(120) });
 
@@ -71,7 +73,8 @@ function openApiDocument(req: Request) {
     security: [{ ControllerBearer: [] }],
     paths: {
       "/health": { get: { summary: "Controller health" } },
-      "/instances": { get: { summary: "List instances" }, post: { summary: "Register instance and generate Dockerfile communication protocol" } },
+      "/inventory": { get: { summary: "Read fleet health and aggregate CPU, memory, disk, and session capacity" } },
+      "/instances": { get: { summary: "List self-enrolled instances and reported resources" }, post: { summary: "Create an API provisioning record and generate a self-enrolling Dockerfile" } },
       "/instances/{instanceId}": { get: { summary: "Read instance and persisted session history" }, patch: { summary: "Rename instance" }, delete: { summary: "Remove instance" } },
       "/commands": { post: { summary: "Execute command on selected or least-loaded instance" } },
       "/sessions/{sessionId}": { get: { summary: "Read terminal session and ordered history" } },
@@ -92,6 +95,13 @@ export function registerPublicControllerApi(app: Express) {
     catch (error) { return apiError(res, 503, error instanceof Error ? error.message : "Instance registry unavailable"); }
   });
 
+  app.get("/api/v1/inventory", async (_req, res) => {
+    try {
+      const instances = await listAllInstances();
+      return res.status(200).json({ data: { summary: summarizeFleet(instances), instances } });
+    } catch (error) { return apiError(res, 503, error instanceof Error ? error.message : "Fleet inventory unavailable"); }
+  });
+
   app.post("/api/v1/instances", async (req, res) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) return apiError(res, 400, "name and HTTP(S) instanceUrl are required");
@@ -101,7 +111,7 @@ export function registerPublicControllerApi(app: Express) {
       const instanceUrl = normalizeInstanceUrl(parsed.data.instanceUrl);
       const instance = await createInstance({ createdBy: owner.id, name: parsed.data.name, instanceUrl, enrollmentTokenHash: hashSecret(enrollmentToken) });
       if (!instance) return apiError(res, 500, "Instance could not be created");
-      const dockerfile = generateAgentDockerfile({ controllerUrl: requestControllerUrl(req), instanceName: instance.name, enrollmentToken });
+      const dockerfile = generateAgentDockerfile({ controllerUrl: requestControllerUrl(req), enrollmentToken });
       let deliveryStatus: "sent" | "pending" = "sent";
       let deliveryError: string | undefined;
       try { await sendDockerfile(instanceUrl, dockerfile, enrollmentToken); }
@@ -144,7 +154,8 @@ export function registerPublicControllerApi(app: Express) {
     if (!parsed.success) return apiError(res, 400, "command is required; instanceId is optional");
     try {
       const owner = await getControllerServiceOwner();
-      const instance = parsed.data.instanceId ? await getInstanceById(parsed.data.instanceId) : await chooseLeastLoadedInstanceGlobal();
+      const preference: ResourcePreference = parsed.data.resourcePreference ?? "balanced";
+      const instance = parsed.data.instanceId ? await getInstanceById(parsed.data.instanceId) : await choosePreferredInstanceGlobal(preference);
       if (!instance || instance.status !== "online") return apiError(res, 409, "No online instance is available for command execution");
       const session = await createTerminalSession({ instanceId: instance.id, createdBy: owner.id, command: parsed.data.command });
       if (!session) return apiError(res, 500, "Session could not be created");
@@ -154,7 +165,7 @@ export function registerPublicControllerApi(app: Express) {
         await executeOnInstance(instance, session.id, parsed.data.command);
         const event = await addTerminalEvent({ sessionId: session.id, sequence: 0, kind: "status", payload: "Running" });
         if (event) terminalEventBus.publish({ sessionId: session.id, sequence: 0, kind: "status", payload: "Running", createdAt: event.createdAt });
-        return res.status(202).json({ data: { sessionId: session.id, instanceId: instance.id, route: parsed.data.instanceId ? "selected instance" : "least-loaded instance" } });
+        return res.status(202).json({ data: { sessionId: session.id, instanceId: instance.id, route: parsed.data.instanceId ? "selected instance" : `${preference} preferred instance` } });
       } catch (error) {
         await incrementActiveSessions(instance.id, -1);
         await updateSession(session.id, { state: "failed", completedAt: new Date(), exitCode: 1 });

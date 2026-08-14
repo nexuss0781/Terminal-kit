@@ -20,5 +20,7 @@ services:
         generateValue: true
       - key: CONTROLLER_API_KEY
         sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
       - key: PUBLIC_CONTROLLER_URL
         sync: false

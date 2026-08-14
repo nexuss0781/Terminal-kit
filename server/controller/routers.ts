@@ -81,7 +81,6 @@ export const controllerRouter = router({
         if (!instance) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Instance could not be created" });
         const dockerfile = generateAgentDockerfile({
           controllerUrl: controllerUrl(ctx.req),
-          instanceName: instance.name,
           enrollmentToken,
         });
         let deliveryStatus: "sent" | "pending" = "sent";

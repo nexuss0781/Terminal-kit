@@ -1,6 +1,5 @@
 type AgentDockerfileOptions = {
   controllerUrl: string;
-  instanceName: string;
   enrollmentToken: string;
 };
 
@@ -8,29 +7,27 @@ function escapeDockerValue(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-export function generateAgentDockerfile({ controllerUrl, instanceName, enrollmentToken }: AgentDockerfileOptions): string {
+export function generateAgentDockerfile({ controllerUrl, enrollmentToken }: AgentDockerfileOptions): string {
   const controller = escapeDockerValue(controllerUrl.replace(/\/$/, ""));
-  const name = escapeDockerValue(instanceName);
   const enrollment = escapeDockerValue(enrollmentToken);
 
-  return `# TERMINAL_KIT_PROTOCOL_VERSION=1
+  return `# TERMINAL_KIT_PROTOCOL_VERSION=2
 FROM node:22-alpine
 RUN apk add --no-cache util-linux
 WORKDIR /app
 ENV CONTROLLER_URL="${controller}" \\
-    INSTANCE_NAME="${name}" \\
     ENROLLMENT_TOKEN="${enrollment}" \\
     PORT=8080
 RUN cat <<'AGENT' > /app/agent.mjs
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { cpus, freemem, loadavg, totalmem } from "node:os";
-import { readFile, writeFile } from "node:fs/promises";
+import { arch, cpus, freemem, hostname, loadavg, platform, totalmem } from "node:os";
+import { readFile, statfs, writeFile } from "node:fs/promises";
 
 const controllerUrl = (process.env.CONTROLLER_URL || "").replace(/\\/$/, "");
-const instanceName = process.env.INSTANCE_NAME || "";
 const enrollmentToken = process.env.ENROLLMENT_TOKEN || "";
 const port = Number(process.env.PORT || 8080);
+const agentVersion = "2.0.0";
 let agentToken = process.env.AGENT_TOKEN || "";
 let instanceId = "";
 let controllerQueue = Promise.resolve();
@@ -56,15 +53,34 @@ function authorized(req) {
   return Boolean(agentToken) && req.headers.authorization === "Bearer " + agentToken;
 }
 
-function metrics() {
+function publicEndpoint() {
+  return (process.env.INSTANCE_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "").replace(/\\/$/, "");
+}
+
+async function metrics() {
   const totalMemory = totalmem();
   const usedMemory = totalMemory - freemem();
   const cpuCount = Math.max(1, cpus().length);
+  let diskTotalMb = 0;
+  let diskFreeMb = 0;
+  try {
+    const disk = await statfs("/");
+    diskTotalMb = Math.round(Number(disk.blocks) * Number(disk.bsize) / 1024 / 1024);
+    diskFreeMb = Math.round(Number(disk.bfree) * Number(disk.bsize) / 1024 / 1024);
+  } catch {}
   return {
+    cpuCount,
     cpuPercent: Math.min(100, Math.round((loadavg()[0] / cpuCount) * 100)),
     memoryPercent: Math.round((usedMemory / totalMemory) * 100),
     memoryTotalMb: Math.round(totalMemory / 1024 / 1024),
+    diskPercent: diskTotalMb ? Math.round(((diskTotalMb - diskFreeMb) / diskTotalMb) * 100) : 0,
+    diskTotalMb,
+    diskFreeMb,
   };
+}
+
+function identity() {
+  return { hostname: hostname(), agentVersion, osPlatform: platform(), architecture: arch(), instanceUrl: publicEndpoint() };
 }
 
 function wait(milliseconds) {
@@ -99,11 +115,11 @@ function queueController(path, body) {
 
 async function enroll() {
   if (!agentToken) agentToken = await readFile("/app/.agent-token", "utf8").catch(() => "");
-  if (!controllerUrl || !instanceName || !enrollmentToken || agentToken) return;
+  if (!controllerUrl || !enrollmentToken || agentToken) return;
   const response = await fetch(controllerUrl + "/api/agent/enroll", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ instanceName, enrollmentToken, instanceUrl: process.env.INSTANCE_PUBLIC_URL || "" }),
+    body: JSON.stringify({ enrollmentToken, ...identity(), ...(await metrics()) }),
   });
   if (!response.ok) throw new Error("Enrollment failed with " + response.status);
   const data = await response.json();
@@ -114,7 +130,7 @@ async function enroll() {
 
 async function heartbeat() {
   if (!agentToken) return;
-  await queueController("/api/agent/heartbeat", { instanceId, ...metrics() });
+  await queueController("/api/agent/heartbeat", { instanceId, ...identity(), ...(await metrics()) });
 }
 
 function launchSession({ sessionId, command }) {
@@ -137,12 +153,12 @@ function launchSession({ sessionId, command }) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://" + req.headers.host);
-  if (req.method === "GET" && url.pathname === "/v1/terminal-kit/health") return send(res, 200, { status: "online", ...metrics() });
+  if (req.method === "GET" && url.pathname === "/v1/terminal-kit/health") return send(res, 200, { status: "online", ...identity(), ...(await metrics()) });
   if (req.method === "POST" && url.pathname === "/v1/terminal-kit/bootstrap") {
     if (req.headers["x-terminal-kit-enrollment"] !== enrollmentToken) return send(res, 401, { error: "Invalid enrollment credential" });
     const dockerfile = await readText(req);
-    if (!dockerfile.includes("TERMINAL_KIT_PROTOCOL_VERSION=1")) return send(res, 400, { error: "Unsupported Dockerfile communication protocol" });
-    return send(res, 202, { accepted: true, protocol: "TERMINAL_KIT_PROTOCOL_VERSION=1" });
+    if (!dockerfile.includes("TERMINAL_KIT_PROTOCOL_VERSION=2")) return send(res, 400, { error: "Unsupported Dockerfile communication protocol" });
+    return send(res, 202, { accepted: true, protocol: "TERMINAL_KIT_PROTOCOL_VERSION=2" });
   }
   if (!authorized(req)) return send(res, 401, { error: "Unauthorized" });
   if (req.method === "POST" && url.pathname === "/v1/terminal-kit/sessions") {

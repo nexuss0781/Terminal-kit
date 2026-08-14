@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { getParadoxStore } from "../paradox/store";
 import type { Instance, TerminalEvent, TerminalSession } from "../paradox/types";
-import { selectLeastLoaded } from "./balancer";
+import { selectLeastLoaded, selectPreferredInstance, type ResourcePreference } from "./balancer";
 
 export async function createInstance(values: Pick<Instance, "createdBy" | "name" | "instanceUrl" | "enrollmentTokenHash">) { return (await getParadoxStore()).createInstance(values); }
 export async function getInstanceById(id: number) { return (await getParadoxStore()).getInstanceById(id); }
@@ -17,6 +17,7 @@ export async function removeInstanceById(id: number) { return (await getParadoxS
 export async function markStaleInstancesOffline(maxAgeMs: number) { return (await getParadoxStore()).markStaleInstancesOffline(maxAgeMs); }
 export async function chooseLeastLoadedInstance(userId: number) { return selectLeastLoaded(await listInstancesForUser(userId)); }
 export async function chooseLeastLoadedInstanceGlobal() { return selectLeastLoaded(await listAllInstances()); }
+export async function choosePreferredInstanceGlobal(preference: ResourcePreference) { return selectPreferredInstance(await listAllInstances(), preference); }
 export async function createTerminalSession(values: Pick<TerminalSession, "instanceId" | "createdBy" | "command">) { return (await getParadoxStore()).createSession({ ...values, id: nanoid(20) }); }
 export async function getSessionById(id: string) { return (await getParadoxStore()).getSessionById(id); }
 export async function getSessionForUser(id: string, userId: number) { return (await getParadoxStore()).getSessionForUser(id, userId); }

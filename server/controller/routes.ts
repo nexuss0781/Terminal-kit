@@ -11,7 +11,7 @@ import {
   updateSession,
 } from "./db";
 import { terminalEventBus } from "./stream";
-import { isTerminalOutputKind } from "./protocol";
+import { isTerminalOutputKind, normalizeInstanceUrl } from "./protocol";
 import { hasControllerApiAccess } from "./apiAuth";
 
 function bearerToken(req: Request) {
@@ -30,6 +30,28 @@ function asNonNegativeInteger(value: unknown) {
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
 }
 
+function asShortText(value: unknown, limit = 160) {
+  return typeof value === "string" ? value.trim().slice(0, limit) || null : null;
+}
+
+function reportedAgentMetadata(body: Record<string, unknown>) {
+  const endpoint = typeof body.instanceUrl === "string" ? normalizeInstanceUrl(body.instanceUrl) : undefined;
+  return {
+    ...(endpoint ? { instanceUrl: endpoint } : {}),
+    hostname: asShortText(body.hostname),
+    agentVersion: asShortText(body.agentVersion),
+    osPlatform: asShortText(body.osPlatform),
+    architecture: asShortText(body.architecture),
+    cpuCount: asNonNegativeInteger(body.cpuCount),
+    cpuPercent: asNonNegativeInteger(body.cpuPercent),
+    memoryPercent: asNonNegativeInteger(body.memoryPercent),
+    memoryTotalMb: asNonNegativeInteger(body.memoryTotalMb),
+    diskPercent: asNonNegativeInteger(body.diskPercent),
+    diskTotalMb: asNonNegativeInteger(body.diskTotalMb),
+    diskFreeMb: asNonNegativeInteger(body.diskFreeMb),
+  };
+}
+
 export function registerControllerRoutes(app: Express) {
   app.get("/api/controller/health", (_req, res) => res.status(200).json({ status: "online" }));
 
@@ -38,13 +60,15 @@ export function registerControllerRoutes(app: Express) {
       const enrollmentToken = typeof req.body?.enrollmentToken === "string" ? req.body.enrollmentToken : "";
       const instance = enrollmentToken ? await getInstanceByEnrollmentHash(hashSecret(enrollmentToken)) : undefined;
       if (!instance || instance.status !== "pending") return res.status(401).json({ error: "Invalid or expired enrollment" });
-      if (req.body?.instanceName !== instance.name) return res.status(400).json({ error: "Instance name does not match enrollment" });
+      const metadata = reportedAgentMetadata(req.body ?? {});
+      if (!metadata.instanceUrl) return res.status(400).json({ error: "A public HTTP(S) instance URL is required for self-enrollment" });
       const agentToken = createSecret();
-      const reportedUrl = typeof req.body?.instanceUrl === "string" && req.body.instanceUrl ? req.body.instanceUrl : instance.instanceUrl;
+      const automaticName = metadata.hostname ?? `Terminal agent ${instance.id}`;
       await updateInstance(instance.id, {
         agentTokenHash: hashSecret(agentToken),
         agentTokenCiphertext: encryptSecret(agentToken),
-        instanceUrl: reportedUrl,
+        name: instance.name.startsWith("Pending agent") ? automaticName : instance.name,
+        ...metadata,
         status: "online",
         lastSeenAt: new Date(),
       });
@@ -57,11 +81,12 @@ export function registerControllerRoutes(app: Express) {
   app.post("/api/agent/heartbeat", async (req, res) => {
     const instance = await authenticateAgent(req);
     if (!instance) return res.status(401).json({ error: "Unauthorized" });
+    let metadata: ReturnType<typeof reportedAgentMetadata>;
+    try { metadata = reportedAgentMetadata(req.body ?? {}); }
+    catch { return res.status(400).json({ error: "Invalid reported instance URL" }); }
     await updateInstance(instance.id, {
       status: "online",
-      cpuPercent: asNonNegativeInteger(req.body?.cpuPercent),
-      memoryPercent: asNonNegativeInteger(req.body?.memoryPercent),
-      memoryTotalMb: asNonNegativeInteger(req.body?.memoryTotalMb),
+      ...metadata,
       lastSeenAt: new Date(),
     });
     return res.json({ accepted: true });

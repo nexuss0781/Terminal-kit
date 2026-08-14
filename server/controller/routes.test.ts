@@ -40,18 +40,21 @@ describe("agent enrollment route", () => {
     await new Promise<void>(resolve => server.close(() => resolve()));
   });
 
-  it("enrolls a valid pending instance and persists a hashed, encrypted agent credential", async () => {
-    db.getInstanceByEnrollmentHash.mockResolvedValue({ id: 22, name: "Render agent", status: "pending", instanceUrl: "https://old.example.com" });
+  it("self-enrolls a valid pending instance and persists its endpoint, automatic name, inventory, and encrypted agent credential", async () => {
+    db.getInstanceByEnrollmentHash.mockResolvedValue({ id: 22, name: "Pending agent 22", status: "pending", instanceUrl: "pending://22" });
     const response = await fetch(`${baseUrl}/api/agent/enroll`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ instanceName: "Render agent", enrollmentToken: "one-time-token", instanceUrl: "https://agent.onrender.com" }),
+      body: JSON.stringify({ enrollmentToken: "one-time-token", instanceUrl: "https://agent.onrender.com", hostname: "render-worker", agentVersion: "2.0.0", osPlatform: "linux", architecture: "x64", cpuCount: 2, cpuPercent: 12, memoryPercent: 45, memoryTotalMb: 4096, diskPercent: 35, diskTotalMb: 20_480, diskFreeMb: 13_312 }),
     });
     const payload = await response.json() as { instanceId: number; agentToken: string };
     expect(response.status).toBe(201);
     expect(payload.instanceId).toBe(22);
     const persisted = db.updateInstance.mock.calls[0][1];
     expect(persisted.status).toBe("online");
+    expect(persisted.name).toBe("render-worker");
+    expect(persisted.instanceUrl).toBe("https://agent.onrender.com");
+    expect(persisted).toMatchObject({ hostname: "render-worker", agentVersion: "2.0.0", osPlatform: "linux", architecture: "x64", cpuCount: 2, memoryTotalMb: 4096, diskTotalMb: 20_480, diskFreeMb: 13_312 });
     expect(persisted.agentTokenHash).toBe(hashSecret(payload.agentToken));
     expect(decryptSecret(persisted.agentTokenCiphertext)).toBe(payload.agentToken);
   });

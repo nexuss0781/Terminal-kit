@@ -28,9 +28,17 @@ export type Instance = {
   enrollmentTokenHash: string;
   agentTokenHash: string | null;
   agentTokenCiphertext: string | null;
+  hostname: string | null;
+  agentVersion: string | null;
+  osPlatform: string | null;
+  architecture: string | null;
+  cpuCount: number;
   cpuPercent: number;
   memoryPercent: number;
   memoryTotalMb: number;
+  diskPercent: number;
+  diskTotalMb: number;
+  diskFreeMb: number;
   activeSessions: number;
   lastSeenAt: Date | null;
   createdAt: Date;

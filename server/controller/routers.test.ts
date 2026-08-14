@@ -89,7 +89,7 @@ describe("controller instance and session procedures", () => {
     expect(db.createInstance).toHaveBeenCalledWith(expect.objectContaining({ createdBy: user.id, name: "Staging agent", instanceUrl: "https://staging.example.com" }));
     expect(fetch).toHaveBeenCalledWith("https://staging.example.com/v1/terminal-kit/bootstrap", expect.objectContaining({ method: "POST" }));
     expect(result.deliveryStatus).toBe("sent");
-    expect(result.dockerfile).toContain("TERMINAL_KIT_PROTOCOL_VERSION=1");
+    expect(result.dockerfile).toContain("TERMINAL_KIT_PROTOCOL_VERSION=2");
   });
 
   it("uses the selected instance when requested and keeps active-session accounting ordered", async () => {

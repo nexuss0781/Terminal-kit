@@ -7,13 +7,17 @@ function normalizedMetric(value: unknown, fallback: number) {
   return Number.isFinite(Number(value)) ? Math.max(0, Math.round(Number(value))) : fallback;
 }
 
-export function healthUpdateFromProbe(previous: { cpuPercent: number; memoryPercent: number; memoryTotalMb: number }, metrics?: Record<string, unknown>) {
+export function healthUpdateFromProbe(previous: { cpuCount?: number; cpuPercent: number; memoryPercent: number; memoryTotalMb: number; diskPercent?: number; diskTotalMb?: number; diskFreeMb?: number }, metrics?: Record<string, unknown>) {
   if (!metrics) return { status: "offline" as const };
   return {
     status: "online" as const,
+    cpuCount: normalizedMetric(metrics.cpuCount, previous.cpuCount ?? 0),
     cpuPercent: normalizedMetric(metrics.cpuPercent, previous.cpuPercent),
     memoryPercent: normalizedMetric(metrics.memoryPercent, previous.memoryPercent),
     memoryTotalMb: normalizedMetric(metrics.memoryTotalMb, previous.memoryTotalMb),
+    diskPercent: normalizedMetric(metrics.diskPercent, previous.diskPercent ?? 0),
+    diskTotalMb: normalizedMetric(metrics.diskTotalMb, previous.diskTotalMb ?? 0),
+    diskFreeMb: normalizedMetric(metrics.diskFreeMb, previous.diskFreeMb ?? 0),
     lastSeenAt: new Date(),
   };
 }

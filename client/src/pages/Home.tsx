@@ -1,74 +1,146 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, Clipboard, Copy, FileCode2, KeyRound, Loader2, Server, TerminalSquare, TriangleAlert } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { CheckCircle2, Cpu, Download, HardDrive, KeyRound, Loader2, LogOut, MemoryStick, Pencil, RefreshCw, Server, TerminalSquare, Wifi, WifiOff } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type RegistrationResponse = {
-  data?: {
-    dockerfile: string;
-    deliveryStatus: "sent" | "pending";
-    deliveryError?: string;
-  };
-  error?: { message?: string };
+type Instance = {
+  id: number;
+  name: string;
+  instanceUrl: string;
+  status: "pending" | "online" | "offline";
+  hostname: string | null;
+  agentVersion: string | null;
+  osPlatform: string | null;
+  architecture: string | null;
+  cpuCount: number;
+  cpuPercent: number;
+  memoryPercent: number;
+  memoryTotalMb: number;
+  diskPercent: number;
+  diskTotalMb: number;
+  diskFreeMb: number;
+  activeSessions: number;
+  lastSeenAt: string | null;
 };
 
+type FleetData = {
+  summary: {
+    instances: { registered: number; online: number; offline: number; pending: number };
+    capacity: { onlineCpuCores: number; onlineMemoryTotalMb: number; onlineMemoryAvailableMb: number; onlineDiskTotalMb: number; onlineDiskFreeMb: number; activeSessions: number };
+    utilization: { cpuPercent: number; memoryPercent: number; diskPercent: number };
+  };
+  instances: Instance[];
+};
+
+const formatGb = (mb: number) => `${(mb / 1024).toFixed(mb >= 10_240 ? 0 : 1)} GB`;
+const statusStyle = { online: "bg-emerald-400/10 text-emerald-300 ring-emerald-300/20", offline: "bg-rose-400/10 text-rose-300 ring-rose-300/20", pending: "bg-amber-400/10 text-amber-300 ring-amber-300/20" };
+
 export default function Home() {
-  const [controllerKey, setControllerKey] = useState("");
-  const [name, setName] = useState("");
-  const [instanceUrl, setInstanceUrl] = useState("");
-  const [dockerfile, setDockerfile] = useState("");
-  const [deliveryStatus, setDeliveryStatus] = useState<"sent" | "pending" | undefined>();
-  const [deliveryError, setDeliveryError] = useState<string | undefined>();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [fleet, setFleet] = useState<FleetData | null>(null);
+  const [fleetError, setFleetError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const response = await fetch("/api/v1/instances", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${controllerKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ name, instanceUrl }),
-      });
-      const result = await response.json().catch(() => ({})) as RegistrationResponse;
-      if (!response.ok || !result.data) throw new Error(result.error?.message ?? "The controller could not register this instance.");
-      setDockerfile(result.data.dockerfile);
-      setDeliveryStatus(result.data.deliveryStatus);
-      setDeliveryError(result.data.deliveryError);
-      setName("");
-      setInstanceUrl("");
-      result.data.deliveryStatus === "sent"
-        ? toast.success("Dockerfile communication protocol sent to the instance URL.")
-        : toast.warning("Dockerfile generated; the remote URL has not acknowledged delivery.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Registration failed.");
-    } finally {
-      setIsSubmitting(false);
+  const loadFleet = async () => {
+    setFleetError(null);
+    const response = await fetch("/api/admin/inventory", { credentials: "same-origin" });
+    if (response.status === 401) { setAuthenticated(false); return; }
+    const payload = await response.json() as { data?: FleetData; error?: string };
+    if (!response.ok || !payload.data) {
+      const message = payload.error ?? "Fleet inventory could not be loaded.";
+      setFleetError(message);
+      throw new Error(message);
     }
+    setFleet(payload.data);
+  };
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const session = await fetch("/api/admin/session", { credentials: "same-origin" });
+        const payload = await session.json() as { authenticated?: boolean };
+        const isAuthenticated = Boolean(payload.authenticated);
+        setAuthenticated(isAuthenticated);
+        if (isAuthenticated) await loadFleet().catch(() => undefined);
+      } catch {
+        setAuthenticated(false);
+      }
+    })();
+  }, []);
+
+  const orderedInstances = useMemo(() => {
+    const statusOrder = { online: 0, pending: 1, offline: 2 } as const;
+    return [...(fleet?.instances ?? [])].sort((left, right) => statusOrder[left.status] - statusOrder[right.status] || left.name.localeCompare(right.name));
+  }, [fleet]);
+
+  async function login(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/login", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) });
+      if (!response.ok) throw new Error("Incorrect administrator password.");
+      setPassword("");
+      setAuthenticated(true);
+      await loadFleet().catch(() => undefined);
+      toast.success("Administrator session opened.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Sign-in failed."); }
+    finally { setLoading(false); }
   }
 
-  function copyDockerfile() {
-    void navigator.clipboard.writeText(dockerfile);
-    toast.success("Dockerfile copied.");
+  async function logout() {
+    await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" });
+    setFleet(null);
+    setAuthenticated(false);
   }
 
-  function downloadDockerfile() {
-    const blob = new Blob([dockerfile], { type: "text/plain;charset=utf-8" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = "Dockerfile.terminal-kit";
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
+  async function downloadProvisioningDockerfile() {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/provisioning/dockerfile", { credentials: "same-origin" });
+      if (!response.ok) throw new Error("Provisioning Dockerfile could not be created.");
+      const blob = await response.blob();
+      const file = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = file;
+      anchor.download = "Dockerfile.terminal-kit";
+      anchor.click();
+      URL.revokeObjectURL(file);
+      toast.success("Dockerfile downloaded. Deploy it; the agent will enroll itself.");
+      await loadFleet();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Download failed."); }
+    finally { setLoading(false); }
   }
 
-  return <main className="min-h-screen bg-[radial-gradient(circle_at_77%_0%,rgba(16,185,129,0.1),transparent_28%),#070b10] px-5 py-8 text-slate-100 sm:px-8 sm:py-12"><div className="mx-auto max-w-4xl"><header className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 text-[#062018] shadow-[0_0_24px_rgba(52,211,153,0.16)]"><TerminalSquare className="h-5 w-5" /></div><div><p className="text-sm font-semibold tracking-tight text-white">Terminal Kit</p><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Instance enrollment</p></div></header>
-    <section className="mt-16 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start"><div className="pt-2"><p className="font-mono text-[11px] uppercase tracking-[0.18em] text-emerald-300/80">Dockerfile communication protocol</p><h1 className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">Connect a remote instance.</h1><p className="mt-5 max-w-md text-base leading-7 text-slate-400">Enter the controller key, public instance URL, and instance name. Terminal-Kit generates the communication Dockerfile and sends it to the instance.</p><div className="mt-7 flex gap-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.05] p-4 text-sm leading-6 text-slate-400"><KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /><p>The controller key remains only in this browser tab’s memory and is sent only to this controller.</p></div></div>
-      <section className="rounded-[1.5rem] border border-white/10 bg-[#0d141e]/90 p-5 shadow-2xl shadow-black/15 sm:p-7"><form onSubmit={submit} className="space-y-5"><div><label className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Controller API key</label><Input value={controllerKey} onChange={event => setControllerKey(event.target.value)} required type="password" autoComplete="off" placeholder="tkctl_..." className="mt-2 h-11 border-white/10 bg-[#070b10] font-mono text-xs text-slate-100 placeholder:text-slate-600 focus-visible:ring-emerald-400/45" /></div><div><label className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Instance name</label><Input value={name} onChange={event => setName(event.target.value)} required placeholder="Nexuss worker one" className="mt-2 h-11 border-white/10 bg-[#070b10] text-slate-100 placeholder:text-slate-600 focus-visible:ring-emerald-400/45" /></div><div><label className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Instance URL</label><Input value={instanceUrl} onChange={event => setInstanceUrl(event.target.value)} required type="url" placeholder="https://instance.onrender.com" className="mt-2 h-11 border-white/10 bg-[#070b10] font-mono text-xs text-slate-100 placeholder:text-slate-600 focus-visible:ring-emerald-400/45" /></div><Button disabled={isSubmitting || !controllerKey.trim() || !name.trim() || !instanceUrl.trim()} type="submit" className="h-11 w-full rounded-xl bg-emerald-400 font-semibold text-[#062018] hover:bg-emerald-300">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode2 className="h-4 w-4" />}Generate and send Dockerfile</Button></form></section></section>
-    {dockerfile ? <section className="mt-10 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#0d141e]/90 shadow-xl shadow-black/10"><div className="flex flex-col gap-3 border-b border-white/8 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div className="flex items-center gap-3">{deliveryStatus === "sent" ? <Check className="h-4 w-4 text-emerald-300" /> : <TriangleAlert className="h-4 w-4 text-amber-300" />}<div><p className="text-sm font-semibold text-white">Dockerfile communication protocol</p><p className="mt-0.5 text-xs text-slate-500">{deliveryStatus === "sent" ? "Remote instance acknowledged Dockerfile delivery." : deliveryError || "Download and deploy the generated Dockerfile."}</p></div></div><div className="flex gap-2"><Button onClick={copyDockerfile} variant="ghost" className="h-9 rounded-lg bg-white/[0.05] text-xs text-slate-300 hover:bg-white/[0.1] hover:text-white"><Copy className="h-3.5 w-3.5" /> Copy</Button><Button onClick={downloadDockerfile} className="h-9 rounded-lg bg-white/[0.08] text-xs text-slate-200 hover:bg-white/[0.14]"><Clipboard className="h-3.5 w-3.5" /> Download</Button></div></div><ScrollArea className="h-[360px] bg-[#05080c]"><pre className="p-5 font-mono text-[11px] leading-5 text-emerald-100/80 sm:p-6">{dockerfile}</pre></ScrollArea></section> : null}
-    <footer className="mt-12 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-600"><Server className="h-3.5 w-3.5" /> Backend control plane protected by controller API key</footer></div></main>;
+  async function saveName(instanceId: number) {
+    try {
+      const response = await fetch(`/api/admin/instances/${instanceId}`, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: editingName }) });
+      if (!response.ok) throw new Error("Instance could not be renamed.");
+      setEditingId(null);
+      await loadFleet();
+      toast.success("Instance renamed.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Rename failed."); }
+  }
+
+  if (authenticated === null) return <main className="grid min-h-screen place-items-center bg-[#070b10]"><Loader2 className="h-5 w-5 animate-spin text-emerald-300" /></main>;
+
+  if (!authenticated) return <main className="grid min-h-screen place-items-center bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,0.12),transparent_36%),#070b10] px-5 text-slate-100"><section className="w-full max-w-md rounded-[1.75rem] border border-white/10 bg-[#0d141e]/95 p-7 shadow-2xl shadow-black/40 sm:p-9"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-400 text-[#062018] shadow-[0_0_24px_rgba(52,211,153,0.16)]"><TerminalSquare className="h-6 w-6" /></div><p className="mt-7 font-mono text-[11px] uppercase tracking-[0.18em] text-emerald-300/80">Terminal-Kit Control Plane</p><h1 className="mt-3 text-3xl font-semibold tracking-tight">Administrator access</h1><p className="mt-3 text-sm leading-6 text-slate-400">Sign in to download a provisioning Dockerfile and manage automatically enrolled instances.</p><form className="mt-7 space-y-4" onSubmit={login}><label className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Administrator password</label><Input value={password} onChange={event => setPassword(event.target.value)} type="password" required autoComplete="current-password" className="h-11 border-white/10 bg-[#070b10] text-slate-100 focus-visible:ring-emerald-400/45" /><Button disabled={loading || !password} className="h-11 w-full rounded-xl bg-emerald-400 font-semibold text-[#062018] hover:bg-emerald-300">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}Open control plane</Button></form></section></main>;
+
+  const summary = fleet?.summary;
+  return <main className="min-h-screen bg-[#070b10] text-slate-100"><header className="sticky top-0 z-10 border-b border-white/8 bg-[#0b1018]/90 px-5 py-4 backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 text-[#062018]"><TerminalSquare className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-white">Terminal Kit</p><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Fleet control plane</p></div></div><div className="flex items-center gap-2"><Button onClick={() => void loadFleet().catch(() => undefined)} variant="ghost" className="h-9 rounded-lg text-slate-300 hover:bg-white/[0.06] hover:text-white"><RefreshCw className="h-4 w-4" />Refresh</Button><Button onClick={logout} variant="ghost" className="h-9 rounded-lg text-slate-400 hover:bg-white/[0.06] hover:text-white"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Sign out</span></Button></div></div></header>
+    <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10"><section className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]"><div><p className="font-mono text-[11px] uppercase tracking-[0.18em] text-emerald-300/80">Automatic agent enrollment</p><h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Deploy a Dockerfile. The instance joins itself.</h1><p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400">The provisioning Dockerfile contains the one-time protocol credential. After deployment, the agent reports its endpoint, operating system, CPU, RAM, disk, and heartbeat directly to the controller.</p></div><section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-300/75">New instance</p><Button disabled={loading} onClick={downloadProvisioningDockerfile} className="mt-4 h-11 w-full rounded-xl bg-emerald-400 font-semibold text-[#062018] hover:bg-emerald-300">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}Download provisioning Dockerfile</Button><p className="mt-3 text-xs leading-5 text-slate-400">No controller key, name, or endpoint is entered here.</p></section></section>
+      {fleetError ? <section role="alert" className="mt-6 flex flex-col gap-3 rounded-xl border border-rose-400/25 bg-rose-400/[0.07] px-4 py-3 text-sm text-rose-100 sm:flex-row sm:items-center sm:justify-between"><p>Inventory unavailable: {fleetError}</p><Button onClick={() => void loadFleet().catch(() => undefined)} variant="outline" className="h-8 border-rose-300/25 text-rose-100 hover:bg-rose-300/10">Retry</Button></section> : null}
+      <section className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric icon={<Server />} label="Online agents" value={`${summary?.instances.online ?? 0} / ${summary?.instances.registered ?? 0}`} detail={`${summary?.instances.pending ?? 0} pending`} /><Metric icon={<Cpu />} label="CPU capacity" value={`${summary?.capacity.onlineCpuCores ?? 0} cores`} detail={`${summary?.utilization.cpuPercent ?? 0}% utilization`} /><Metric icon={<MemoryStick />} label="Available RAM" value={formatGb(summary?.capacity.onlineMemoryAvailableMb ?? 0)} detail={`${formatGb(summary?.capacity.onlineMemoryTotalMb ?? 0)} total`} /><Metric icon={<HardDrive />} label="Free disk" value={formatGb(summary?.capacity.onlineDiskFreeMb ?? 0)} detail={`${formatGb(summary?.capacity.onlineDiskTotalMb ?? 0)} total`} /></section>
+      <section className="mt-8 overflow-hidden rounded-2xl border border-white/10 bg-[#0d141e]"><div className="flex items-center justify-between border-b border-white/8 px-5 py-4"><div><h2 className="text-sm font-semibold text-white">Registered instances</h2><p className="mt-0.5 text-xs text-slate-500">Endpoint, health, host identity, and reported resources.</p></div><span className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">{orderedInstances.length} tracked</span></div>{orderedInstances.length ? <div className="divide-y divide-white/6">{orderedInstances.map(instance => <article key={instance.id} className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(200px,1fr)_0.9fr_1.2fr_0.8fr]"><div><div className="flex items-center gap-2">{editingId === instance.id ? <><Input value={editingName} onChange={event => setEditingName(event.target.value)} className="h-8 border-white/10 bg-[#070b10] text-sm text-white" /><Button size="sm" onClick={() => void saveName(instance.id)} className="h-8 bg-emerald-400 text-[#062018] hover:bg-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" /></Button></> : <><p className="truncate text-sm font-semibold text-white">{instance.name}</p><button onClick={() => { setEditingId(instance.id); setEditingName(instance.name); }} className="text-slate-500 transition hover:text-emerald-300" aria-label={`Rename ${instance.name}`}><Pencil className="h-3.5 w-3.5" /></button></>}</div><p className="mt-1 truncate font-mono text-[11px] text-slate-500">{instance.instanceUrl}</p></div><div><span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-mono text-[10px] uppercase tracking-wider ring-1 ${statusStyle[instance.status]}`}>{instance.status === "online" ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{instance.status}</span><p className="mt-2 text-xs text-slate-500">{instance.hostname ?? "Awaiting agent identity"} {instance.agentVersion ? `· v${instance.agentVersion}` : ""}</p></div><div className="grid grid-cols-3 gap-2 text-xs"><Resource label="CPU" value={`${instance.cpuPercent}%`} detail={`${instance.cpuCount} cores`} /><Resource label="RAM" value={`${instance.memoryPercent}%`} detail={formatGb(instance.memoryTotalMb)} /><Resource label="Disk" value={`${instance.diskPercent}%`} detail={`${formatGb(instance.diskFreeMb)} free`} /></div><div className="text-xs text-slate-500"><p>{instance.osPlatform ?? "—"} / {instance.architecture ?? "—"}</p><p className="mt-1">{instance.activeSessions} active sessions</p></div></article>)}</div> : <div className="px-5 py-14 text-center"><Server className="mx-auto h-6 w-6 text-slate-600" /><p className="mt-3 text-sm text-slate-400">No agents are registered yet.</p><p className="mt-1 text-xs text-slate-600">Download and deploy a provisioning Dockerfile to add the first instance automatically.</p></div>}</section></div></main>;
+}
+
+function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
+  return <section className="rounded-2xl border border-white/8 bg-[#0d141e] p-4"><div className="flex items-center gap-2 text-slate-500"><span className="text-emerald-300">{icon}</span><p className="font-mono text-[10px] uppercase tracking-[0.14em]">{label}</p></div><p className="mt-3 text-xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></section>;
+}
+
+function Resource({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return <div className="rounded-lg bg-white/[0.035] px-2 py-1.5"><p className="font-mono text-[9px] uppercase tracking-wider text-slate-600">{label}</p><p className="mt-0.5 text-slate-200">{value}</p><p className="mt-0.5 text-[10px] text-slate-500">{detail}</p></div>;
 }
