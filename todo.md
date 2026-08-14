@@ -28,3 +28,4 @@
 - [x] Reduce the frontend to the instance URL/name registration and Dockerfile communication delivery flow only.
 - [x] Add backend-first API documentation, OpenAPI-style endpoint reference, and integration examples for AI agents.
 - [x] Validate the backend-first contract, minimal registration frontend, test suite, and production build.
+- [ ] Create a private GitHub repository named Terminal-kit and push the completed source code.
