@@ -36,3 +36,4 @@
 - [ ] Add resolver-driven ParadoxDB gateway discovery with validation, caching, and deterministic fallback behavior for Terminal-Kit and reusable integrations.
 - [ ] Test the active-domain resolver contract and deployment artifact before enabling ParadoxDB persistence migration.
 - [x] Add `paradox-domain/render.yaml` for direct standalone Docker deployment on Render.
+- [x] Convert `paradox-domain` from a Docker runtime resolver to a Render Static Site that builds `active-domain.json` from `PARADOX_GATEWAY_URL`.

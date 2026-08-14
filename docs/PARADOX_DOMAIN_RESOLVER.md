@@ -2,7 +2,7 @@
 
 ParadoxDB can be deployed at a different domain over time. Terminal-Kit therefore does not need to hard-code a gateway domain. Instead, integrations resolve `PARADOX_DOMAIN_RESOLVER_URL` first, read its `active-domain.json`, validate the returned gateway URL, and then connect to the active ParadoxDB endpoint.
 
-The deployable resolver lives at [`paradox-domain/`](../paradox-domain/). It is a standalone static Docker service, separate from the Terminal-Kit controller.
+The deployable resolver lives at [`paradox-domain/`](../paradox-domain/). It is a standalone Render Static Site, separate from the Terminal-Kit controller. Its build reads `PARADOX_GATEWAY_URL` and emits the current `active-domain.json` document.
 
 ## Integration algorithm
 
@@ -14,4 +14,4 @@ The deployable resolver lives at [`paradox-domain/`](../paradox-domain/). It is 
 | 4. Fall back | If the resolver is unavailable, use `PARADOX_GATEWAY_URL` only when explicitly configured. |
 | 5. Fail safely | If neither a resolver result nor fallback exists, refuse to create a ParadoxDB connection. |
 
-This approach lets an operator move ParadoxDB by redeploying only `paradox-domain` with the new `PARADOX_GATEWAY_URL`; every correctly configured integration observes the new gateway after its TTL expires.
+This approach lets an operator move ParadoxDB by setting a new `PARADOX_GATEWAY_URL` on the `paradox-domain` Static Site and selecting **Save, rebuild, and deploy**; every correctly configured integration observes the new gateway after its TTL expires.

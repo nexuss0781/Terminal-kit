@@ -1,6 +1,0 @@
-{
-  "schemaVersion": 1,
-  "gatewayUrl": "${PARADOX_GATEWAY_URL}",
-  "ttlSeconds": ${PARADOX_RESOLVER_TTL_SECONDS},
-  "resolverVersion": "${PARADOX_RESOLVER_VERSION}"
-}
