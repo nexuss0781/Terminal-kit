@@ -30,3 +30,9 @@
 - [x] Validate the backend-first contract, minimal registration frontend, test suite, and production build.
 - [x] Create a private GitHub repository named Terminal-kit and push the completed source code.
 - [x] Change the Terminal-kit GitHub repository visibility from private to public.
+- [ ] Inspect the user-provided ParadoxDB skill and migrate Terminal-Kit persistence and Render configuration to its supported integration pattern.
+- [x] Define and document the `paradox-domain/` active-domain resolver contract for dynamically locating the currently deployed ParadoxDB gateway.
+- [x] Build a Docker-deployable static `paradox-domain/` service that publishes the active ParadoxDB gateway domain from configuration.
+- [ ] Add resolver-driven ParadoxDB gateway discovery with validation, caching, and deterministic fallback behavior for Terminal-Kit and reusable integrations.
+- [ ] Test the active-domain resolver contract and deployment artifact before enabling ParadoxDB persistence migration.
+- [x] Add `paradox-domain/render.yaml` for direct standalone Docker deployment on Render.

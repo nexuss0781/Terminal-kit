@@ -1,0 +1,15 @@
+services:
+  - type: web
+    runtime: docker
+    name: paradox-domain
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: PARADOX_GATEWAY_URL
+        sync: false
+      - key: PARADOX_RESOLVER_TTL_SECONDS
+        value: "60"
+      - key: PARADOX_RESOLVER_VERSION
+        value: "1"
