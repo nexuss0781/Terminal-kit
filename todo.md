@@ -30,10 +30,10 @@
 - [x] Validate the backend-first contract, minimal registration frontend, test suite, and production build.
 - [x] Create a private GitHub repository named Terminal-kit and push the completed source code.
 - [x] Change the Terminal-kit GitHub repository visibility from private to public.
-- [ ] Inspect the user-provided ParadoxDB skill and migrate Terminal-Kit persistence and Render configuration to its supported integration pattern.
+- [x] Inspect the user-provided ParadoxDB skill and migrate Terminal-Kit persistence and Render configuration to its supported integration pattern.
 - [x] Define and document the `paradox-domain/` active-domain resolver contract for dynamically locating the currently deployed ParadoxDB gateway.
 - [x] Build a Docker-deployable static `paradox-domain/` service that publishes the active ParadoxDB gateway domain from configuration.
-- [ ] Add resolver-driven ParadoxDB gateway discovery with validation, caching, and deterministic fallback behavior for Terminal-Kit and reusable integrations.
+- [x] Add resolver-driven ParadoxDB gateway discovery with validation, caching, and deterministic fallback behavior for Terminal-Kit and reusable integrations.
 - [x] Test the active-domain resolver contract and deployment artifact before enabling ParadoxDB persistence migration.
 - [x] Fix Paradox-DB’s async SQLAlchemy PostgreSQL driver configuration for Render and push the validated correction to GitHub.
 - [x] Update Paradox-DB test helpers to reuse the shared async PostgreSQL URL normalizer.
@@ -41,5 +41,12 @@
 - [x] Update the live paradox-domain Static Site with concise public purpose and usage guidance while preserving the active-domain resolver endpoint.
 - [x] Push the updated paradox-domain static-site content and trigger its Render rebuild.
 - [x] Re-verify the live root page and active-domain resolver document after deployment.
+- [x] Update the Paradox-DB skill with concise platform-neutral active-domain resolver purpose and usage guidance.
+- [x] Review Terminal-Kit Render deployment requirements and clarify whether ParadoxDB persistence is currently integrated or requires a separate migration.
+- [x] Replace Terminal-Kit’s default SQL persistence with ParadoxDB using the live active-domain resolver and update the required Render configuration.
+- [x] Create dedicated ParadoxDB service credentials for Terminal-Kit, store them server-side, and validate resolver-backed synchronization.
+- [x] Verify a clean final controller restart and a real ParadoxDB-backed persistence flow using only the final default configuration.
+- [x] Document and validate the official runtime-derived ParadoxDB service identity strategy without requiring manual ParadoxDB secrets.
+- [x] Re-read the user-provided ParadoxDB skill and complete Terminal-Kit persistence migration using the live active-domain resolver.
 - [x] Add `paradox-domain/render.yaml` for direct standalone Docker deployment on Render.
 - [x] Convert `paradox-domain` from a Docker runtime resolver to a Render Static Site that builds `active-domain.json` from `PARADOX_GATEWAY_URL`.

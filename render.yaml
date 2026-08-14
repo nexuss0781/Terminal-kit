@@ -4,15 +4,16 @@ services:
     name: terminal-kit-controller
     plan: starter
     buildCommand: corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm run build
-    preDeployCommand: corepack pnpm drizzle-kit migrate
     startCommand: corepack pnpm start
     healthCheckPath: /api/controller/health
     autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
-        sync: false
+      - key: PARADOX_DOMAIN_RESOLVER_URL
+        value: https://paradox-domain.onrender.com/active-domain.json
+      - key: PARADOX_PROJECT
+        value: terminal-kit
       - key: JWT_SECRET
         generateValue: true
       - key: INSTANCE_CREDENTIAL_KEY

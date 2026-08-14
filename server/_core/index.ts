@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { registerControllerRoutes } from "../controller/routes";
 import { startHealthMonitor } from "../controller/health";
 import { registerPublicControllerApi } from "../controller/publicApi";
+import { closeParadoxStore } from "../paradox/store";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -67,6 +68,12 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  const shutdown = () => {
+    closeParadoxStore().finally(() => server.close());
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 startServer().catch(console.error);
