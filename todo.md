@@ -67,3 +67,5 @@
 - [x] Update deployment documentation, test the new protocol and admin security, publish, and verify the public Render administrator entry point.
 - [x] Republish the current tested release and verify that the deployed hashed JavaScript bundle loads without browser transport errors.
 - [x] Inspect the post-republish browser console and network state to confirm the live JavaScript bundle has no transport error.
+- [x] Create and publish a separate public `terminalkit-docker` repository containing the self-enrolling Terminal-Kit Dockerfile and deployment instructions.
+- [x] Rename the public Docker-agent repository to `terminalkit-docker` and align its public name with Terminal-Kit.
