@@ -19,3 +19,9 @@ The standalone enrollment refactor was published to `main` as revision `5c4f3dd`
 The self-enrollment control-plane revision was published to `main` as `674b7ad`. At the first live check, Render was still waking the service and displayed its application-loading page; this is not a controller error. The follow-up check confirmed that `https://terminalkit.onrender.com/` now serves the password-only **Administrator access** page. It offers Dockerfile-only provisioning and contains no controller API key, instance-name, or instance-URL input.
 
 The public liveness endpoint continues to return `{"status":"online"}`. The new versioned API route correctly rejects unauthenticated requests with `401 Unauthorized`, confirming that the controller bearer-token boundary remains active.
+
+## Republish Verification
+
+After a browser reported a transient `ERR_QUIC_PROTOCOL_ERROR` for `assets/index-u2Cpjbw5.js`, the current main revision was republished as `bf6df33`. The exact reported hashed bundle path was confirmed to be served by Render, and a follow-up root-page check loaded the administrator password page successfully. The reported asset condition is therefore not a missing or stale deployed bundle at this time.
+
+Post-republish browser-console inspection returned no console output. Browser resource timing recorded successful loading of `assets/index-u2Cpjbw5.js` and the associated CSS bundle, with no transport failure reported by the active page.
