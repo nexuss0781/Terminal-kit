@@ -1,7 +1,7 @@
 import express from "express";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ createInstance: vi.fn(), getInstanceById: vi.fn(), listAllInstances: vi.fn(), removeInstanceById: vi.fn(), updateInstance: vi.fn() }));
+const db = vi.hoisted(() => ({ createInstance: vi.fn(), getInstanceById: vi.fn(), listAllInstances: vi.fn(), listSessionsForInstanceAdmin: vi.fn(), listTerminalEvents: vi.fn(), removeInstanceById: vi.fn(), updateInstance: vi.fn() }));
 const owner = vi.hoisted(() => ({ getControllerServiceOwner: vi.fn() }));
 const health = vi.hoisted(() => ({ refreshInstanceAvailability: vi.fn(), runHealthSweep: vi.fn() }));
 
@@ -22,6 +22,7 @@ describe("administrator provisioning download", () => {
     Object.values(health).forEach(mock => mock.mockReset());
     health.runHealthSweep.mockResolvedValue(undefined);
     db.listAllInstances.mockResolvedValue([]);
+    db.listSessionsForInstanceAdmin.mockResolvedValue([]);
     const app = express();
     app.use(express.json());
     registerAdminRoutes(app);
@@ -62,6 +63,19 @@ describe("administrator provisioning download", () => {
     const renamed = await fetch(`${baseUrl}/api/admin/instances/21`, { method: "PATCH", headers, body: JSON.stringify({ name: "primary-worker" }) });
     expect(renamed.status).toBe(200);
     expect(db.updateInstance).toHaveBeenCalledWith(21, { name: "primary-worker" });
+  });
+
+  it("returns the complete persisted transaction history when an administrator opens an instance", async () => {
+    const instance = { id: 21, name: "render-worker", status: "online", availability: "active" };
+    const session = { id: "session-1", instanceId: 21, command: "read value", state: "completed", exitCode: 0 };
+    const events = [{ id: 1, sessionId: "session-1", sequence: 1, kind: "stdin", payload: "Nexuss\n" }, { id: 2, sessionId: "session-1", sequence: 2, kind: "stdout", payload: "Nexuss\n" }];
+    db.getInstanceById.mockResolvedValue(instance);
+    db.listSessionsForInstanceAdmin.mockResolvedValue([session]);
+    db.listTerminalEvents.mockResolvedValue(events);
+    const login = await fetch(`${baseUrl}/api/admin/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: process.env.ADMIN_PASSWORD }) });
+    const details = await fetch(`${baseUrl}/api/admin/instances/21`, { headers: { cookie: login.headers.get("set-cookie") ?? "" } });
+    await expect(details.json()).resolves.toMatchObject({ data: { instance, transactions: [{ session, events }] } });
+    expect(db.listTerminalEvents).toHaveBeenCalledWith("session-1");
   });
 
   it("blocks, refreshes, unblocks, and permanently deletes an instance through administrator-only routes", async () => {

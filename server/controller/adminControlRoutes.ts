@@ -1,6 +1,6 @@
 import type { Express, Request } from "express";
 import { requireAdmin } from "./adminRoutes";
-import { getInstanceById, listAllInstances, removeInstanceById, updateInstance } from "./db";
+import { getInstanceById, listAllInstances, listSessionsForInstanceAdmin, listTerminalEvents, removeInstanceById, updateInstance } from "./db";
 import { generateAgentDockerfile } from "./dockerfile";
 import { summarizeFleet } from "./inventory";
 import { refreshInstanceAvailability, runHealthSweep } from "./health";
@@ -19,7 +19,10 @@ export function registerAdminControlRoutes(app: Express) {
     if (!Number.isInteger(instanceId) || instanceId <= 0) return res.status(400).json({ error: "Invalid instance ID" });
     try {
       const instance = await getInstanceById(instanceId);
-      return instance ? res.status(200).json({ data: instance }) : res.status(404).json({ error: "Instance not found" });
+      if (!instance) return res.status(404).json({ error: "Instance not found" });
+      const sessions = await listSessionsForInstanceAdmin(instanceId);
+      const transactions = await Promise.all(sessions.map(async session => ({ session, events: await listTerminalEvents(session.id) })));
+      return res.status(200).json({ data: { instance, transactions } });
     } catch (error) { return res.status(503).json({ error: error instanceof Error ? error.message : "Instance unavailable" }); }
   });
 
