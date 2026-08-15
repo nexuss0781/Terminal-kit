@@ -83,3 +83,6 @@
 - [x] Add and run a comprehensive interactive terminal test that verifies prompt rendering, multiple sequential stdin inputs, one-by-one echoed results, persisted event ordering, completion, and transaction detail display.
 - [x] Temporarily authenticate GitHub CLI with the user-supplied credential, verify the authentication, and log out again.
 - [x] Fix the live terminal agent’s sequential stdin handling so each separately accepted input advances exactly one interactive prompt without dropping or merging steps.
+- [x] Write a complete, public-ready Terminal-Kit API reference with authentication, lifecycle, instances, command, stdin, streaming, history, and response examples.
+- [x] Create a globally reusable Terminal-Kit AI-agent skill with clear end-to-end command execution and interactive terminal guidance.
+- [ ] Publish and attach the validated API reference and global skill for review.

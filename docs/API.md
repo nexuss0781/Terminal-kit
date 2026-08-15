@@ -1,109 +1,230 @@
-# Terminal-Kit Control-Plane API
+# Terminal-Kit API Reference
 
-Terminal-Kit exposes a **backend-first** control-plane API for Nexuss agentic AIs. A client can register and manage remote instances, send a shell command to a named instance or to the **least-loaded instance**, submit interactive stdin, retrieve persisted command history, and subscribe to real-time stdout and stderr.
+Terminal-Kit is a backend-first terminal control plane for Nexuss agentic AIs. It discovers terminal instances, selects an Active instance, executes commands, exchanges interactive input, streams output, and preserves the complete terminal transaction.
 
-> The browser page is not the control surface. It is only the enrollment helper that produces the Dockerfile communication protocol. Use this API for orchestration.
+## API families
 
-## Authentication and discovery
+| Family | Base path | Intended caller | Authentication |
+|---|---|---|---|
+| Controller API | `/api/v1` | AI agents and integrations | `Authorization: Bearer <CONTROLLER_API_KEY>` |
+| Agent protocol | `/api/agent` | Deployed Terminal-Kit agents | Agent bearer token or bootstrap proof |
+| Agent service | `/v1/terminal-kit` | Controller-to-agent transport | Agent bearer token where required |
+| Administrator API | `/api/admin` | Browser fleet console | Password-created session cookie |
+| Controller health | `/api/controller/health` | Service monitoring | None |
 
-All `/api/v1` operations require the server-only controller credential:
+> Use the **controller API** for AI work. It returns a durable `sessionId` for every terminal command.
+
+## Controller API setup
+
+```bash
+export TERMINAL_KIT_URL="https://terminalkit.onrender.com"
+export TERMINAL_KIT_API_KEY="<CONTROLLER_API_KEY>"
+```
+
+Every `/api/v1/*` request requires:
 
 ```http
-Authorization: Bearer $CONTROLLER_API_KEY
+Authorization: Bearer <CONTROLLER_API_KEY>
+Content-Type: application/json
 ```
 
-Do not place `CONTROLLER_API_KEY` in browser code, prompts, repositories, or generated Dockerfiles. Read it from the calling agent’s protected environment. The machine-readable reference is available at `GET /api/v1/openapi.json` using the same bearer credential.
+Successful controller responses use `{ "data": ... }`. Errors use:
 
-```bash
-export TERMINAL_KIT_URL="https://your-controller.onrender.com"
-export CONTROLLER_API_KEY="<server-only-value>"
-
-curl -sS "$TERMINAL_KIT_URL/api/v1/health" \
-  -H "Authorization: Bearer $CONTROLLER_API_KEY"
+```json
+{
+  "error": {
+    "status": 409,
+    "message": "No Active instance is available for command execution"
+  }
+}
 ```
 
-## Controller endpoints
+## Controller endpoint map
 
-| Method and path | Purpose | Request body | Success response |
-| --- | --- | --- | --- |
-| `GET /api/v1/health` | Read controller liveness and API version. | — | Controller status. |
-| `GET /api/v1/openapi.json` | Discover the versioned API contract. | — | OpenAPI-style document. |
-| `GET /api/v1/instances` | List all registered instances with status and resource metrics. | — | `data: Instance[]`. |
-| `POST /api/v1/instances` | Register an instance and generate/send the Dockerfile communication protocol. | `name`, `instanceUrl` | Instance, Dockerfile, and delivery status. |
-| `GET /api/v1/instances/:instanceId` | Read an instance and its persisted command sessions. | — | Instance and session list. |
-| `PATCH /api/v1/instances/:instanceId` | Rename an instance. | `name` | Updated instance. |
-| `DELETE /api/v1/instances/:instanceId` | Remove an instance and cascaded terminal history. | — | `204 No Content`. |
-| `POST /api/v1/commands` | Execute a command on a selected instance or the least-loaded online instance. | `command`, optional `instanceId` | Session ID, chosen instance, and route. |
-| `GET /api/v1/sessions/:sessionId` | Retrieve persisted command, state, exit code, and ordered terminal events. | — | Session and event history. |
-| `POST /api/v1/sessions/:sessionId/stdin` | Send stdin simulation to an active interactive process. | `input` | Accepted status. |
-| `GET /api/v1/sessions/:sessionId/stream` | Subscribe to server-sent `terminal` events for live stdout and stderr. | — | SSE stream. |
+| Method | Path | Body | Result |
+|---|---|---|---|
+| `GET` | `/api/v1/openapi.json` | — | Machine-readable OpenAPI discovery document. |
+| `GET` | `/api/v1/health` | — | Controller service and runtime state. |
+| `GET` | `/api/v1/instances` | — | All registered instances. |
+| `GET` | `/api/v1/inventory` | — | Probed fleet health, resources, and capacity. |
+| `POST` | `/api/v1/instances` | `{ "name", "instanceUrl" }` | Provisioning record and generated Dockerfile. |
+| `GET` | `/api/v1/instances/:id` | — | Instance and persisted session summaries. |
+| `PATCH` | `/api/v1/instances/:id` | `{ "name" }` | Renamed instance. |
+| `DELETE` | `/api/v1/instances/:id` | — | `204 No Content`. |
+| `POST` | `/api/v1/instances/:id/block` | — | Instance marked `blocked`. |
+| `POST` | `/api/v1/instances/:id/unblock` | — | Instance restored and availability refreshed. |
+| `POST` | `/api/v1/instances/:id/availability` | — | Fresh endpoint availability result. |
+| `POST` | `/api/v1/commands` | `{ "command", "instanceId"?, "resourcePreference"? }` | `202` plus `sessionId`. |
+| `GET` | `/api/v1/sessions/:id` | — | Session and ordered terminal events. |
+| `POST` | `/api/v1/sessions/:id/stdin` | `{ "input" }` | Delivers terminal input. |
+| `GET` | `/api/v1/sessions/:id/stream` | — | `terminal` SSE event stream. |
 
-## Register a remote instance
+`resourcePreference` accepts `balanced`, `cpu`, `memory`, and `disk`.
+
+## Discover and select an instance
 
 ```bash
-curl -sS -X POST "$TERMINAL_KIT_URL/api/v1/instances" \
-  -H "Authorization: Bearer $CONTROLLER_API_KEY" \
+curl "$TERMINAL_KIT_URL/api/v1/inventory" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY"
+```
+
+Select `status: "online"` and `availability: "active"` for a named target. Omit `instanceId` when controller-selected routing is preferred.
+
+An instance contains identity, resources, and health fields:
+
+| Group | Fields |
+|---|---|
+| Identity | `id`, `name`, `instanceUrl`, `hostname`, `agentVersion`, `osPlatform`, `architecture` |
+| Routing | `status`, `availability`, `availabilityHttpStatus`, `availabilityCheckedAt` |
+| Resources | `cpuCount`, `cpuPercent`, `memoryPercent`, `memoryTotalMb`, `diskPercent`, `diskTotalMb`, `diskFreeMb`, `activeSessions` |
+| Time | `lastSeenAt`, `createdAt`, `updatedAt` |
+
+`status` values are `pending`, `online`, `offline`, and `blocked`. `availability` values are `active`, `idle`, and `unknown`.[1]
+
+## Execute a command
+
+Run on a selected instance:
+
+```bash
+curl -X POST "$TERMINAL_KIT_URL/api/v1/commands" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "nexuss-render-worker-1",
-    "instanceUrl": "https://nexuss-render-worker-1.onrender.com"
-  }'
+  --data '{"instanceId":1,"command":"uname -a && printf ready"}'
 ```
 
-The result contains `data.dockerfile`. Store it only in the private remote-instance deployment path: it embeds a one-time enrollment credential. `deliveryStatus` is `sent` only when the instance URL acknowledges `POST /v1/terminal-kit/bootstrap`; otherwise it is `pending` and the returned Dockerfile is the deployment artifact.
-
-## Execute, monitor, and interact
-
-Use `instanceId` when the agent must target a specific machine. Omit it to route to the **least-loaded instance**, which considers online status, reported CPU, reported memory, and active session count.
+Run with controller-selected routing:
 
 ```bash
-curl -sS -X POST "$TERMINAL_KIT_URL/api/v1/commands" \
-  -H "Authorization: Bearer $CONTROLLER_API_KEY" \
+curl -X POST "$TERMINAL_KIT_URL/api/v1/commands" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"command":"npm run health-check"}'
+  --data '{"command":"nproc && free -m","resourcePreference":"cpu"}'
 ```
 
-The call returns a `sessionId`. Subscribe to the session before or immediately after dispatch to receive event records in real time:
+The response is:
 
-```bash
-curl -N "$TERMINAL_KIT_URL/api/v1/sessions/$SESSION_ID/stream" \
-  -H "Authorization: Bearer $CONTROLLER_API_KEY"
+```json
+{
+  "data": {
+    "sessionId": "9NeRGQ73SspbTFxrknVn",
+    "instanceId": 1,
+    "route": "selected instance"
+  }
+}
 ```
 
-For interactive CLI prompts, send the exact string the process expects, including `\n` when an Enter keypress is required:
+Persist `sessionId` immediately. It is the handle for streaming, input, history, and final status.
+
+## Stream and complete an interactive terminal session
+
+Open the session stream:
 
 ```bash
-curl -sS -X POST "$TERMINAL_KIT_URL/api/v1/sessions/$SESSION_ID/stdin" \
-  -H "Authorization: Bearer $CONTROLLER_API_KEY" \
+curl -N "$TERMINAL_KIT_URL/api/v1/sessions/<SESSION_ID>/stream" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY"
+```
+
+Every message has `event: terminal` and JSON data:
+
+```text
+event: terminal
+data: {"sessionId":"...","sequence":1,"kind":"stdout","payload":"PROMPT>","createdAt":"2026-08-15T04:12:04.339Z"}
+```
+
+Follow this exact interaction cycle:
+
+1. Receive the prompt in a `stdout` event.
+2. Send one complete terminal response.
+3. Read the returned `stdout` event.
+4. Wait for the next prompt.
+5. Send the next response.
+6. Finish when the session reports `completed` or `failed`.
+
+For a line-oriented pseudo-terminal prompt, send `\r` as the Enter key:
+
+```bash
+curl -X POST "$TERMINAL_KIT_URL/api/v1/sessions/<SESSION_ID>/stdin" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"input":"yes\n"}'
+  --data '{"input":"alpha\r"}'
 ```
 
-## AI-agent integration pattern
+Read the durable result at any time:
 
-An agent should keep the controller key in its protected runtime environment and should use the session ID as its durable execution handle. The agent can reconnect to the SSE route after a transport interruption; Terminal-Kit first replays persisted events, then emits new `terminal` events as the remote process writes output.
-
-```ts
-const response = await fetch(`${process.env.TERMINAL_KIT_URL}/api/v1/commands`, {
-  method: "POST",
-  headers: {
-    authorization: `Bearer ${process.env.CONTROLLER_API_KEY}`,
-    "content-type": "application/json",
-  },
-  body: JSON.stringify({ command: "your-command-here" }),
-});
-
-const { data } = await response.json();
-// Persist data.sessionId, then consume /api/v1/sessions/{sessionId}/stream.
+```bash
+curl "$TERMINAL_KIT_URL/api/v1/sessions/<SESSION_ID>" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY"
 ```
 
-## Remote agent callback contract
+`TerminalSession` has `id`, `instanceId`, `command`, `state`, `exitCode`, `startedAt`, `completedAt`, `createdAt`, and `updatedAt`. `state` is `queued`, `running`, `completed`, or `failed`. `TerminalEvent` has `id`, `sessionId`, `sequence`, `kind`, `payload`, and `createdAt`; `kind` is `stdout`, `stderr`, `stdin`, or `status`.[1]
 
-The generated Dockerfile contains the remote agent. It is the only component that should call the controller’s `/api/agent/*` callbacks. These callbacks are authenticated by the encrypted per-instance agent credential, not `CONTROLLER_API_KEY`.
+## Instance lifecycle
 
-| Remote agent callback | Purpose |
-| --- | --- |
-| `POST /api/agent/enroll` | Exchanges one-time enrollment credential for agent credential. |
-| `POST /api/agent/heartbeat` | Reports CPU, memory, and last-seen state. |
-| `POST /api/agent/sessions/:sessionId/events` | Persists stdout or stderr output. |
-| `POST /api/agent/sessions/:sessionId/complete` | Persists exit status and releases active-session capacity. |
+```bash
+# Refresh availability
+curl -X POST "$TERMINAL_KIT_URL/api/v1/instances/1/availability" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY"
+
+# Block new command routing
+curl -X POST "$TERMINAL_KIT_URL/api/v1/instances/1/block" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY"
+
+# Restore command routing
+curl -X POST "$TERMINAL_KIT_URL/api/v1/instances/1/unblock" \
+  -H "Authorization: Bearer $TERMINAL_KIT_API_KEY"
+```
+
+## Agent protocol
+
+The deployed Docker agent owns the terminal process. The controller creates and retains the per-instance agent credential during enrollment.
+
+### Controller-to-agent service
+
+| Method | Path | Authentication | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/terminal-kit/health` | None | Agent identity, endpoint, protocol version, and metrics. |
+| `POST` | `/v1/terminal-kit/bootstrap` | Bootstrap header | Bootstrap challenge. |
+| `POST` | `/v1/terminal-kit/sessions` | Agent bearer token | Starts `{ "sessionId", "command" }`. |
+| `POST` | `/v1/terminal-kit/sessions/:id/stdin` | Agent bearer token | Delivers `{ "input" }`. |
+
+### Agent-to-controller callbacks
+
+| Method | Path | Authentication | Purpose |
+|---|---|---|---|
+| `POST` | `/api/agent/auto-enroll` | Bootstrap proof | Self-registers the deployed agent. |
+| `POST` | `/api/agent/enroll` | Enrollment token | Completes provisioning enrollment. |
+| `POST` | `/api/agent/heartbeat` | Agent bearer token | Updates identity and resources. |
+| `POST` | `/api/agent/sessions/:id/events` | Agent bearer token | Persists `stdout` or `stderr`. |
+| `POST` | `/api/agent/sessions/:id/complete` | Agent bearer token | Records exit code and completes the session. |
+
+## Administrator API
+
+The browser administration API uses an HTTP-only signed session created through password login.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/admin/login` | Creates a session from `{ "password" }`. |
+| `POST` | `/api/admin/logout` | Clears the session. |
+| `GET` | `/api/admin/session` | Returns authentication state. |
+| `GET` | `/api/admin/inventory` | Returns probed fleet inventory. |
+| `GET` | `/api/admin/instances/:id` | Returns an instance and all transaction sessions with events. |
+| `PATCH` | `/api/admin/instances/:id` | Renames an instance. |
+| `POST` | `/api/admin/instances/:id/block` | Blocks an instance. |
+| `POST` | `/api/admin/instances/:id/unblock` | Unblocks and probes an instance. |
+| `POST` | `/api/admin/instances/:id/availability` | Refreshes availability. |
+| `DELETE` | `/api/admin/instances/:id` | Deletes an instance. |
+| `GET` | `/api/admin/provisioning/dockerfile` | Downloads the self-enrolling Dockerfile. |
+
+## End-to-end AI workflow
+
+1. Read `/api/v1/inventory`.
+2. Select an `online` and `active` instance, or select a routing preference.
+3. Start the command with `/api/v1/commands`.
+4. Save `sessionId`.
+5. Subscribe to `/api/v1/sessions/:id/stream`.
+6. For every prompt, send one input with `/stdin`, read the returned output, then continue.
+7. Read `/api/v1/sessions/:id` and use its `state`, `exitCode`, and ordered events as the final transaction record.
+
+## References
+
+[1]: https://github.com/nexuss0781/Terminal-kit/blob/main/server/paradox/types.ts "Terminal-Kit domain types"
