@@ -78,3 +78,4 @@
 - [x] Test and verify the deployed lifecycle and availability controls using the registered Render instance.
 - [x] Perform the user-authorized fresh enrollment validation using the existing deployed Render agent, then verify it returns Active.
 - [x] Reset the existing agent’s local enrollment token and restart it under the user’s explicit authorization, then confirm automatic re-enrollment.
+- [x] Run a live end-to-end interactive terminal session on the registered Render agent, including stdin, streaming output, and persisted completion verification.
