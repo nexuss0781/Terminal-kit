@@ -79,4 +79,4 @@
 - [x] Perform the user-authorized fresh enrollment validation using the existing deployed Render agent, then verify it returns Active.
 - [x] Reset the existing agent’s local enrollment token and restart it under the user’s explicit authorization, then confirm automatic re-enrollment.
 - [x] Run a live end-to-end interactive terminal session on the registered Render agent, including stdin, streaming output, and persisted completion verification.
-- [ ] Add an administrator instance-detail view that shows all persisted transaction sessions, command input, stdin, output events, timestamps, and completion state for the selected instance.
+- [x] Add an administrator instance-detail view that shows all persisted transaction sessions, command input, stdin, output events, timestamps, and completion state for the selected instance.
