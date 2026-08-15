@@ -80,3 +80,6 @@
 - [x] Reset the existing agent’s local enrollment token and restart it under the user’s explicit authorization, then confirm automatic re-enrollment.
 - [x] Run a live end-to-end interactive terminal session on the registered Render agent, including stdin, streaming output, and persisted completion verification.
 - [x] Add an administrator instance-detail view that shows all persisted transaction sessions, command input, stdin, output events, timestamps, and completion state for the selected instance.
+- [x] Add and run a comprehensive interactive terminal test that verifies prompt rendering, multiple sequential stdin inputs, one-by-one echoed results, persisted event ordering, completion, and transaction detail display.
+- [x] Temporarily authenticate GitHub CLI with the user-supplied credential, verify the authentication, and log out again.
+- [x] Fix the live terminal agent’s sequential stdin handling so each separately accepted input advances exactly one interactive prompt without dropping or merging steps.
