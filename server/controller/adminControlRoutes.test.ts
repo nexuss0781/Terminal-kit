@@ -1,11 +1,13 @@
 import express from "express";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ createInstance: vi.fn(), getInstanceById: vi.fn(), listAllInstances: vi.fn(), updateInstance: vi.fn() }));
+const db = vi.hoisted(() => ({ createInstance: vi.fn(), getInstanceById: vi.fn(), listAllInstances: vi.fn(), removeInstanceById: vi.fn(), updateInstance: vi.fn() }));
 const owner = vi.hoisted(() => ({ getControllerServiceOwner: vi.fn() }));
+const health = vi.hoisted(() => ({ refreshInstanceAvailability: vi.fn(), runHealthSweep: vi.fn() }));
 
 vi.mock("./db", () => db);
 vi.mock("./serviceOwner", () => owner);
+vi.mock("./health", () => health);
 
 import { registerAdminControlRoutes } from "./adminControlRoutes";
 import { registerAdminRoutes } from "./adminRoutes";
@@ -17,6 +19,8 @@ describe("administrator provisioning download", () => {
   beforeEach(async () => {
     process.env.PUBLIC_CONTROLLER_URL = "https://terminalkit.example.com";
     Object.values(db).forEach(mock => mock.mockReset());
+    Object.values(health).forEach(mock => mock.mockReset());
+    health.runHealthSweep.mockResolvedValue(undefined);
     db.listAllInstances.mockResolvedValue([]);
     const app = express();
     app.use(express.json());
@@ -44,7 +48,7 @@ describe("administrator provisioning download", () => {
   });
 
   it("returns fleet inventory and allows the administrator to rename a self-enrolled instance", async () => {
-    const instance = { id: 21, name: "render-worker", status: "online", cpuCount: 2, cpuPercent: 25, memoryTotalMb: 4096, memoryPercent: 50, diskTotalMb: 20_000, diskFreeMb: 12_000, diskPercent: 40, activeSessions: 1 };
+    const instance = { id: 21, name: "render-worker", status: "online", availability: "active", cpuCount: 2, cpuPercent: 25, memoryTotalMb: 4096, memoryPercent: 50, diskTotalMb: 20_000, diskFreeMb: 12_000, diskPercent: 40, activeSessions: 1 };
     db.listAllInstances.mockResolvedValue([instance]);
     db.getInstanceById.mockResolvedValue(instance);
     db.updateInstance.mockResolvedValue({ ...instance, name: "primary-worker" });
@@ -58,5 +62,20 @@ describe("administrator provisioning download", () => {
     const renamed = await fetch(`${baseUrl}/api/admin/instances/21`, { method: "PATCH", headers, body: JSON.stringify({ name: "primary-worker" }) });
     expect(renamed.status).toBe(200);
     expect(db.updateInstance).toHaveBeenCalledWith(21, { name: "primary-worker" });
+  });
+
+  it("blocks, refreshes, unblocks, and permanently deletes an instance through administrator-only routes", async () => {
+    const instance = { id: 21, name: "render-worker", status: "online", availability: "active" };
+    db.getInstanceById.mockResolvedValue(instance);
+    db.updateInstance.mockResolvedValue({ ...instance, status: "blocked" });
+    health.refreshInstanceAvailability.mockResolvedValue({ ...instance, status: "online", availability: "active" });
+    const login = await fetch(`${baseUrl}/api/admin/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: process.env.ADMIN_PASSWORD }) });
+    const headers = { cookie: login.headers.get("set-cookie") ?? "" };
+    await expect(fetch(`${baseUrl}/api/admin/instances/21/block`, { method: "POST", headers }).then(response => response.status)).resolves.toBe(200);
+    expect(db.updateInstance).toHaveBeenCalledWith(21, { status: "blocked" });
+    await expect(fetch(`${baseUrl}/api/admin/instances/21/availability`, { method: "POST", headers }).then(response => response.status)).resolves.toBe(200);
+    expect(health.refreshInstanceAvailability).toHaveBeenCalledWith(instance);
+    await expect(fetch(`${baseUrl}/api/admin/instances/21`, { method: "DELETE", headers }).then(response => response.status)).resolves.toBe(204);
+    expect(db.removeInstanceById).toHaveBeenCalledWith(21);
   });
 });

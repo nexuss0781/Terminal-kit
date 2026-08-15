@@ -4,7 +4,6 @@ import { createServer } from "http";
 import net from "net";
 import { serveStatic, setupVite } from "./vite";
 import { registerControllerRoutes } from "../controller/routes";
-import { startHealthMonitor } from "../controller/health";
 import { registerPublicControllerApi } from "../controller/publicApi";
 import { registerAdminRoutes } from "../controller/adminRoutes";
 import { registerAdminControlRoutes } from "../controller/adminControlRoutes";
@@ -39,7 +38,6 @@ async function startServer() {
   registerAdminRoutes(app);
   registerAdminControlRoutes(app);
   registerPublicControllerApi(app);
-  startHealthMonitor();
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

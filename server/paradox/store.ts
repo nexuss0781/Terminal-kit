@@ -54,7 +54,10 @@ function asUser(row: Row): User {
 function asInstance(row: Row): Instance {
   return {
     id: asNumber(row.id), createdBy: asNumber(row.createdBy), name: String(row.name), instanceUrl: String(row.instanceUrl),
-    status: row.status === "online" || row.status === "offline" ? row.status : "pending",
+    status: row.status === "online" || row.status === "offline" || row.status === "blocked" ? row.status : "pending",
+    availability: row.availability === "active" || row.availability === "idle" ? row.availability : "unknown",
+    availabilityHttpStatus: row.availabilityHttpStatus === null || row.availabilityHttpStatus === undefined ? null : asNumber(row.availabilityHttpStatus),
+    availabilityCheckedAt: asDate(row.availabilityCheckedAt),
     enrollmentTokenHash: String(row.enrollmentTokenHash), agentTokenHash: row.agentTokenHash ? String(row.agentTokenHash) : null,
     agentTokenCiphertext: row.agentTokenCiphertext ? String(row.agentTokenCiphertext) : null,
     hostname: row.hostname ? String(row.hostname) : null, agentVersion: row.agentVersion ? String(row.agentVersion) : null,
@@ -90,7 +93,7 @@ export function createParadoxStore(connection: ParadConnection) {
   const initialize = () => {
     connection.execute("PRAGMA foreign_keys = ON");
     connection.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, openId TEXT NOT NULL UNIQUE, name TEXT, email TEXT, loginMethod TEXT, role TEXT NOT NULL DEFAULT 'user', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, lastSignedIn TEXT NOT NULL)");
-    connection.execute("CREATE TABLE IF NOT EXISTS instances (id INTEGER PRIMARY KEY AUTOINCREMENT, createdBy INTEGER NOT NULL, name TEXT NOT NULL, instanceUrl TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', enrollmentTokenHash TEXT NOT NULL, agentTokenHash TEXT, agentTokenCiphertext TEXT, hostname TEXT, agentVersion TEXT, osPlatform TEXT, architecture TEXT, cpuCount INTEGER NOT NULL DEFAULT 0, cpuPercent INTEGER NOT NULL DEFAULT 0, memoryPercent INTEGER NOT NULL DEFAULT 0, memoryTotalMb INTEGER NOT NULL DEFAULT 0, diskPercent INTEGER NOT NULL DEFAULT 0, diskTotalMb INTEGER NOT NULL DEFAULT 0, diskFreeMb INTEGER NOT NULL DEFAULT 0, activeSessions INTEGER NOT NULL DEFAULT 0, lastSeenAt TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, FOREIGN KEY(createdBy) REFERENCES users(id) ON DELETE CASCADE)");
+    connection.execute("CREATE TABLE IF NOT EXISTS instances (id INTEGER PRIMARY KEY AUTOINCREMENT, createdBy INTEGER NOT NULL, name TEXT NOT NULL, instanceUrl TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', availability TEXT NOT NULL DEFAULT 'unknown', availabilityHttpStatus INTEGER, availabilityCheckedAt TEXT, enrollmentTokenHash TEXT NOT NULL, agentTokenHash TEXT, agentTokenCiphertext TEXT, hostname TEXT, agentVersion TEXT, osPlatform TEXT, architecture TEXT, cpuCount INTEGER NOT NULL DEFAULT 0, cpuPercent INTEGER NOT NULL DEFAULT 0, memoryPercent INTEGER NOT NULL DEFAULT 0, memoryTotalMb INTEGER NOT NULL DEFAULT 0, diskPercent INTEGER NOT NULL DEFAULT 0, diskTotalMb INTEGER NOT NULL DEFAULT 0, diskFreeMb INTEGER NOT NULL DEFAULT 0, activeSessions INTEGER NOT NULL DEFAULT 0, lastSeenAt TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, FOREIGN KEY(createdBy) REFERENCES users(id) ON DELETE CASCADE)");
     const columns = rows("PRAGMA table_info(instances)").map(row => String(row.name));
     const addColumn = (name: string, definition: string) => { if (!columns.includes(name)) connection.execute(`ALTER TABLE instances ADD COLUMN ${name} ${definition}`); };
     addColumn("hostname", "TEXT");
@@ -101,6 +104,9 @@ export function createParadoxStore(connection: ParadConnection) {
     addColumn("diskPercent", "INTEGER NOT NULL DEFAULT 0");
     addColumn("diskTotalMb", "INTEGER NOT NULL DEFAULT 0");
     addColumn("diskFreeMb", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("availability", "TEXT NOT NULL DEFAULT 'unknown'");
+    addColumn("availabilityHttpStatus", "INTEGER");
+    addColumn("availabilityCheckedAt", "TEXT");
     connection.execute("CREATE TABLE IF NOT EXISTS terminalSessions (id TEXT PRIMARY KEY, instanceId INTEGER NOT NULL, createdBy INTEGER NOT NULL, command TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'queued', exitCode INTEGER, startedAt TEXT, completedAt TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, FOREIGN KEY(instanceId) REFERENCES instances(id) ON DELETE CASCADE, FOREIGN KEY(createdBy) REFERENCES users(id) ON DELETE CASCADE)");
     connection.execute("CREATE TABLE IF NOT EXISTS terminalEvents (id INTEGER PRIMARY KEY AUTOINCREMENT, sessionId TEXT NOT NULL, sequence INTEGER NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL, createdAt TEXT NOT NULL, FOREIGN KEY(sessionId) REFERENCES terminalSessions(id) ON DELETE CASCADE)");
     connection.execute("CREATE INDEX IF NOT EXISTS instances_createdBy_idx ON instances(createdBy)");
@@ -151,7 +157,7 @@ export function createParadoxStore(connection: ParadConnection) {
     listAllInstances() { return rows("SELECT * FROM instances ORDER BY id").map(asInstance); },
     updateInstance(id: number, values: InstancePatch) {
       const patch = values as Record<string, unknown>;
-      const keys = ["name", "instanceUrl", "status", "enrollmentTokenHash", "agentTokenHash", "agentTokenCiphertext", "hostname", "agentVersion", "osPlatform", "architecture", "cpuCount", "cpuPercent", "memoryPercent", "memoryTotalMb", "diskPercent", "diskTotalMb", "diskFreeMb", "activeSessions", "lastSeenAt"].filter(key => patch[key] !== undefined);
+      const keys = ["name", "instanceUrl", "status", "availability", "availabilityHttpStatus", "availabilityCheckedAt", "enrollmentTokenHash", "agentTokenHash", "agentTokenCiphertext", "hostname", "agentVersion", "osPlatform", "architecture", "cpuCount", "cpuPercent", "memoryPercent", "memoryTotalMb", "diskPercent", "diskTotalMb", "diskFreeMb", "activeSessions", "lastSeenAt"].filter(key => patch[key] !== undefined);
       if (keys.length) connection.execute(`UPDATE instances SET ${[...keys.map(key => `${key} = ?`), "updatedAt = ?"].join(", ")} WHERE id = ?`, [...keys.map(key => patch[key] instanceof Date ? iso(patch[key] as Date) : patch[key]), iso(), id]);
       return getInstanceById(id);
     },

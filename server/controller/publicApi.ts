@@ -23,6 +23,7 @@ import { normalizeInstanceUrl } from "./protocol";
 import { terminalEventBus, type TerminalStreamEvent } from "./stream";
 import { summarizeFleet } from "./inventory";
 import type { ResourcePreference } from "./balancer";
+import { refreshInstanceAvailability, runHealthSweep } from "./health";
 
 const registerSchema = z.object({ name: z.string().trim().min(1).max(120), instanceUrl: z.string().url().max(2048) });
 const commandSchema = z.object({ command: z.string().min(1).max(20_000), instanceId: z.number().int().positive().optional(), resourcePreference: z.enum(["balanced", "cpu", "memory", "disk"]).optional() });
@@ -73,9 +74,12 @@ function openApiDocument(req: Request) {
     security: [{ ControllerBearer: [] }],
     paths: {
       "/health": { get: { summary: "Controller health" } },
-      "/inventory": { get: { summary: "Read fleet health and aggregate CPU, memory, disk, and session capacity" } },
+      "/inventory": { get: { summary: "Read endpoint-probed Active/Idle fleet health and aggregate command-ready capacity" } },
       "/instances": { get: { summary: "List self-enrolled instances and reported resources" }, post: { summary: "Create an API provisioning record and generate a self-enrolling Dockerfile" } },
       "/instances/{instanceId}": { get: { summary: "Read instance and persisted session history" }, patch: { summary: "Rename instance" }, delete: { summary: "Remove instance" } },
+      "/instances/{instanceId}/block": { post: { summary: "Block an instance from command routing" } },
+      "/instances/{instanceId}/unblock": { post: { summary: "Restore an instance and refresh its endpoint availability" } },
+      "/instances/{instanceId}/availability": { post: { summary: "Probe endpoint and update Active/Idle state" } },
       "/commands": { post: { summary: "Execute command on selected or least-loaded instance" } },
       "/sessions/{sessionId}": { get: { summary: "Read terminal session and ordered history" } },
       "/sessions/{sessionId}/stdin": { post: { summary: "Send stdin simulation to active process" } },
@@ -97,6 +101,7 @@ export function registerPublicControllerApi(app: Express) {
 
   app.get("/api/v1/inventory", async (_req, res) => {
     try {
+      await runHealthSweep();
       const instances = await listAllInstances();
       return res.status(200).json({ data: { summary: summarizeFleet(instances), instances } });
     } catch (error) { return apiError(res, 503, error instanceof Error ? error.message : "Fleet inventory unavailable"); }
@@ -149,6 +154,36 @@ export function registerPublicControllerApi(app: Express) {
     catch (error) { return apiError(res, 503, error instanceof Error ? error.message : "Instance removal failed"); }
   });
 
+  app.post("/api/v1/instances/:instanceId/block", async (req, res) => {
+    const instanceId = Number(req.params.instanceId);
+    if (!Number.isInteger(instanceId) || instanceId <= 0) return apiError(res, 400, "Invalid instanceId");
+    try {
+      const instance = await updateInstance(instanceId, { status: "blocked" });
+      return instance ? res.status(200).json({ data: instance }) : apiError(res, 404, "Instance not found");
+    } catch (error) { return apiError(res, 503, error instanceof Error ? error.message : "Instance block failed"); }
+  });
+
+  app.post("/api/v1/instances/:instanceId/unblock", async (req, res) => {
+    const instanceId = Number(req.params.instanceId);
+    if (!Number.isInteger(instanceId) || instanceId <= 0) return apiError(res, 400, "Invalid instanceId");
+    try {
+      const instance = await getInstanceById(instanceId);
+      if (!instance) return apiError(res, 404, "Instance not found");
+      const restored = await updateInstance(instanceId, { status: "offline" });
+      return res.status(200).json({ data: await refreshInstanceAvailability(restored ?? instance) });
+    } catch (error) { return apiError(res, 503, error instanceof Error ? error.message : "Instance unblock failed"); }
+  });
+
+  app.post("/api/v1/instances/:instanceId/availability", async (req, res) => {
+    const instanceId = Number(req.params.instanceId);
+    if (!Number.isInteger(instanceId) || instanceId <= 0) return apiError(res, 400, "Invalid instanceId");
+    try {
+      const instance = await getInstanceById(instanceId);
+      if (!instance) return apiError(res, 404, "Instance not found");
+      return res.status(200).json({ data: await refreshInstanceAvailability(instance) });
+    } catch (error) { return apiError(res, 503, error instanceof Error ? error.message : "Availability refresh failed"); }
+  });
+
   app.post("/api/v1/commands", async (req, res) => {
     const parsed = commandSchema.safeParse(req.body);
     if (!parsed.success) return apiError(res, 400, "command is required; instanceId is optional");
@@ -156,7 +191,7 @@ export function registerPublicControllerApi(app: Express) {
       const owner = await getControllerServiceOwner();
       const preference: ResourcePreference = parsed.data.resourcePreference ?? "balanced";
       const instance = parsed.data.instanceId ? await getInstanceById(parsed.data.instanceId) : await choosePreferredInstanceGlobal(preference);
-      if (!instance || instance.status !== "online") return apiError(res, 409, "No online instance is available for command execution");
+      if (!instance || instance.status !== "online" || instance.availability !== "active") return apiError(res, 409, "No Active instance is available for command execution");
       const session = await createTerminalSession({ instanceId: instance.id, createdBy: owner.id, command: parsed.data.command });
       if (!session) return apiError(res, 500, "Session could not be created");
       try {

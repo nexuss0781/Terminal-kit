@@ -1,7 +1,7 @@
 import type { Instance } from "../paradox/types";
 
 export function summarizeFleet(instances: Instance[]) {
-  const online = instances.filter(instance => instance.status === "online");
+  const online = instances.filter(instance => instance.status === "online" && instance.availability === "active");
   const sum = (items: Instance[], selector: (instance: Instance) => number) => items.reduce((total, instance) => total + Math.max(0, selector(instance) || 0), 0);
   const memoryTotalMb = sum(online, instance => instance.memoryTotalMb);
   const memoryUsedMb = sum(online, instance => Math.round(instance.memoryTotalMb * instance.memoryPercent / 100));
@@ -15,6 +15,9 @@ export function summarizeFleet(instances: Instance[]) {
     instances: {
       registered: instances.length,
       online: online.length,
+      active: instances.filter(instance => instance.availability === "active").length,
+      idle: instances.filter(instance => instance.availability === "idle").length,
+      blocked: instances.filter(instance => instance.status === "blocked").length,
       offline: instances.filter(instance => instance.status === "offline").length,
       pending: instances.filter(instance => instance.status === "pending").length,
     },

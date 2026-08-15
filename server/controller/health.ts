@@ -1,16 +1,17 @@
-import { decryptSecret } from "./crypto";
 import { listAllInstances, updateInstance } from "./db";
-
-export const HEARTBEAT_INTERVAL_MS = 30_000;
+import type { Instance } from "../paradox/types";
 
 function normalizedMetric(value: unknown, fallback: number) {
   return Number.isFinite(Number(value)) ? Math.max(0, Math.round(Number(value))) : fallback;
 }
 
-export function healthUpdateFromProbe(previous: { cpuCount?: number; cpuPercent: number; memoryPercent: number; memoryTotalMb: number; diskPercent?: number; diskTotalMb?: number; diskFreeMb?: number }, metrics?: Record<string, unknown>) {
-  if (!metrics) return { status: "offline" as const };
+export function healthUpdateFromProbe(previous: Pick<Instance, "status" | "cpuCount" | "cpuPercent" | "memoryPercent" | "memoryTotalMb" | "diskPercent" | "diskTotalMb" | "diskFreeMb">, metrics?: Record<string, unknown>, httpStatus: number | null = 200) {
+  if (!metrics) return { status: previous.status === "blocked" ? "blocked" as const : "offline" as const, availability: "idle" as const, availabilityHttpStatus: httpStatus, availabilityCheckedAt: new Date() };
   return {
-    status: "online" as const,
+    status: previous.status === "blocked" ? "blocked" as const : "online" as const,
+    availability: "active" as const,
+    availabilityHttpStatus: httpStatus,
+    availabilityCheckedAt: new Date(),
     cpuCount: normalizedMetric(metrics.cpuCount, previous.cpuCount ?? 0),
     cpuPercent: normalizedMetric(metrics.cpuPercent, previous.cpuPercent),
     memoryPercent: normalizedMetric(metrics.memoryPercent, previous.memoryPercent),
@@ -24,27 +25,18 @@ export function healthUpdateFromProbe(previous: { cpuCount?: number; cpuPercent:
 
 export async function runHealthSweep() {
   const knownInstances = await listAllInstances();
-  await Promise.all(knownInstances.map(async instance => {
-    if (!instance.agentTokenCiphertext) return;
-    try {
-      const agentToken = decryptSecret(instance.agentTokenCiphertext);
-      const response = await fetch(`${instance.instanceUrl}/v1/terminal-kit/health`, {
-        headers: { authorization: `Bearer ${agentToken}` },
-        signal: AbortSignal.timeout(7_500),
-      });
-      if (!response.ok) throw new Error(`Health endpoint returned ${response.status}`);
-      const metrics = await response.json() as Record<string, unknown>;
-      await updateInstance(instance.id, healthUpdateFromProbe(instance, metrics));
-    } catch {
-      await updateInstance(instance.id, { status: "offline" });
-    }
-  }));
+  await Promise.all(knownInstances.map(refreshInstanceAvailability));
 }
 
-export function startHealthMonitor() {
-  void runHealthSweep().catch(error => console.error("Terminal-Kit health sweep failed", error));
-  const timer = setInterval(() => {
-    void runHealthSweep().catch(error => console.error("Terminal-Kit health sweep failed", error));
-  }, HEARTBEAT_INTERVAL_MS);
-  timer.unref();
+export async function refreshInstanceAvailability(instance: Instance) {
+  try {
+    const response = await fetch(`${instance.instanceUrl}/v1/terminal-kit/health`, { signal: AbortSignal.timeout(7_500) });
+    if (response.status !== 200) {
+      return updateInstance(instance.id, healthUpdateFromProbe(instance, undefined, response.status));
+    }
+    const metrics = await response.json() as Record<string, unknown>;
+    return updateInstance(instance.id, healthUpdateFromProbe(instance, metrics, response.status));
+  } catch {
+    return updateInstance(instance.id, healthUpdateFromProbe(instance, undefined, null));
+  }
 }

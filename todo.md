@@ -71,3 +71,8 @@
 - [x] Rename the public Docker-agent repository to `terminalkit-docker` and align its public name with Terminal-Kit.
 - [x] Replace the terminalkit-docker README with a short, neutral public-purpose overview without deployment, environment, or controller-domain guidance.
 - [x] Remove manual controller URL, enrollment-token, and instance-endpoint requirements from the published Docker agent by implementing controlled automatic self-registration.
+- [x] Add password-protected administrator controls to block, unblock, and permanently delete registered instances.
+- [x] Add endpoint-probed Active/Idle availability state so command routing excludes Render-suspended, 502, or unreachable instances.
+- [x] Show Active/Idle state and lifecycle actions in the administrator fleet console, with safe confirmation for destructive actions.
+- [x] Record no HTTP status for an unreachable endpoint while retaining Idle availability, with a regression test.
+- [ ] Test and verify the deployed lifecycle and availability controls using the registered Render instance.

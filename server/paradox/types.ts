@@ -24,7 +24,10 @@ export type Instance = {
   createdBy: number;
   name: string;
   instanceUrl: string;
-  status: "pending" | "online" | "offline";
+  status: "pending" | "online" | "offline" | "blocked";
+  availability: "active" | "idle" | "unknown";
+  availabilityHttpStatus: number | null;
+  availabilityCheckedAt: Date | null;
   enrollmentTokenHash: string;
   agentTokenHash: string | null;
   agentTokenCiphertext: string | null;

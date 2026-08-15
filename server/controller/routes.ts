@@ -142,7 +142,7 @@ export function registerControllerRoutes(app: Express) {
     try { metadata = reportedAgentMetadata(req.body ?? {}); }
     catch { return res.status(400).json({ error: "Invalid reported instance URL" }); }
     await updateInstance(instance.id, {
-      status: "online",
+      status: instance.status === "blocked" ? "blocked" : "online",
       ...metadata,
       lastSeenAt: new Date(),
     });

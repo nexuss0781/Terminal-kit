@@ -1,6 +1,7 @@
 export type LoadCandidate = {
   id: number;
-  status: "pending" | "online" | "offline";
+  status: "pending" | "online" | "offline" | "blocked";
+  availability?: "active" | "idle" | "unknown";
   cpuCount?: number;
   cpuPercent: number;
   memoryPercent: number;
@@ -30,6 +31,6 @@ export function preferenceScore(instance: LoadCandidate, preference: ResourcePre
 
 export function selectPreferredInstance<T extends LoadCandidate>(instances: T[], preference: ResourcePreference = "balanced"): T | undefined {
   return instances
-    .filter(instance => instance.status === "online")
+    .filter(instance => instance.status === "online" && instance.availability === "active")
     .sort((a, b) => preferenceScore(a, preference) - preferenceScore(b, preference) || a.id - b.id)[0];
 }
