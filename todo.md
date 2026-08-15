@@ -63,7 +63,7 @@
 - [x] Add API-first instance discovery and resource-aware routing for Nexuss AI agents, including selection by declared resource preference.
 - [x] Replace the public registration form with Dockerfile-only provisioning and build a password-protected admin console for instance list, total resources, health, details, and rename management.
 - [x] Preserve administrator authentication and show a retryable inline error when the inventory API temporarily fails.
-- [ ] Set `ADMIN_PASSWORD` on the existing Render service, then complete authenticated live validation of the administrator console and self-enrollment flow.
+- [ ] Complete a fresh authenticated live self-enrollment validation without interrupting the active Render instance.
 - [x] Update deployment documentation, test the new protocol and admin security, publish, and verify the public Render administrator entry point.
 - [x] Republish the current tested release and verify that the deployed hashed JavaScript bundle loads without browser transport errors.
 - [x] Inspect the post-republish browser console and network state to confirm the live JavaScript bundle has no transport error.
@@ -75,4 +75,4 @@
 - [x] Add endpoint-probed Active/Idle availability state so command routing excludes Render-suspended, 502, or unreachable instances.
 - [x] Show Active/Idle state and lifecycle actions in the administrator fleet console, with safe confirmation for destructive actions.
 - [x] Record no HTTP status for an unreachable endpoint while retaining Idle availability, with a regression test.
-- [ ] Test and verify the deployed lifecycle and availability controls using the registered Render instance.
+- [x] Test and verify the deployed lifecycle and availability controls using the registered Render instance.
